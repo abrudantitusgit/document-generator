@@ -1,0 +1,16 @@
+ul {
+    background:#e3e3e3;
+    margin:20px;
+    padding:10px;
+    border-radius:15px;
+}
+
+ul .delete{
+    background:red;
+    border-radius: 10px;
+    padding:5px;
+}
+
+ul li {
+    list-style: none;
+}

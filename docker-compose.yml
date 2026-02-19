@@ -1,0 +1,80 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: interfataacte-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: interfataacte_user
+      POSTGRES_PASSWORD: interfataacte_password
+      POSTGRES_DB: interfataacte_db
+    volumes:
+      - interfataacte_db_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./backend//InterfataActe/InterfataActe
+      dockerfile: Dockerfile
+    container_name: interfataacte-backend
+    volumes:
+      - tempFolder_volume:/mnt/share/temp:rw
+      - clientiBransamentFolder_volume:/mnt/share/clientiBransamente:rw
+      - clientiFotovoltaiceFolder_volume:/mnt/share/clientiFotovoltaice:rw
+    depends_on:
+      - db
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5000
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=interfataacte_db;Username=interfataacte_user;Password=interfataacte_password;SearchPath=first
+    ports:
+      - "5000:5000"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./react
+      dockerfile: Dockerfile
+    container_name: interfataacte-frontend
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=http://backend:5000
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  interfataacte_db_data:
+    external: true
+  tempFolder_volume:
+    driver_opts:
+     type: cifs
+     o: username=ramona,password=Alladin1.,domain=WORKGROUP,vers=3.0
+     device: //192.168.77.120/Share/Data/0. DATA/Public/Documente/TempWord
+  clientiBransamentFolder_volume:
+    driver_opts:
+     type: cifs
+     o: username=ramona,password=Alladin1.,domain=WORKGROUP,vers=3.0
+     device: //192.168.77.120/Share/Data/0. DATA/001. BRANSAMENTE/000. Clienti
+  clientiFotovoltaiceFolder_volume:
+    driver_opts:
+     type: cifs
+     o: username=ramona,password=Alladin1.,domain=WORKGROUP,vers=3.0
+     device: //192.168.77.120/Share/Data/0. DATA/002. FOTOVOLTAICE/fOTOVOLTAICE
+
+
