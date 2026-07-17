@@ -16,20 +16,42 @@ export default function ProiectFotovoltaice(props) {
   const [sugestiiPanouri, setSugestiiPanouri] = useState([]);
   const [sugestiiInvertoare, setSugestiiInvertoare] = useState([]);
   const [sugestiiBaterii, setSugestiiBaterii] = useState([]);
+  const [sugestiiSmartMeter, setSugestiiSmartMeter] = useState([]);
+  const [sugestiiBackup, setSugestiiBackup] = useState([]);
 
-useEffect(() => {
-  fetch(`${baseUrl}/proiectfotovoltaice/sugestii/panouri`)
-    .then(r => r.json())
-    .then(setSugestiiPanouri);
+  useEffect(() => {
+    fetch(`${baseUrl}/proiectfotovoltaice/sugestii/panouri`)
+      .then(r => r.json())
+      .then(setSugestiiPanouri);
 
-  fetch(`${baseUrl}/proiectfotovoltaice/sugestii/invertoare`)
-    .then(r => r.json())
-    .then(setSugestiiInvertoare);
+    fetch(`${baseUrl}/proiectfotovoltaice/sugestii/invertoare`)
+      .then(r => r.json())
+      .then(setSugestiiInvertoare);
 
-  fetch(`${baseUrl}/proiectfotovoltaice/sugestii/baterii`)
-    .then(r => r.json())
-    .then(setSugestiiBaterii);
-}, []);
+    fetch(`${baseUrl}/proiectfotovoltaice/sugestii/baterii`)
+      .then(r => r.json())
+      .then(setSugestiiBaterii);
+    fetch(`${baseUrl}/proiectfotovoltaice/sugestii/smartmeter`)
+      .then(r => r.json())
+      .then(setSugestiiSmartMeter);
+    fetch(`${baseUrl}/proiectfotovoltaice/sugestii/backup`)
+      .then(r => r.json())
+      .then(setSugestiiBackup);
+  }, []);
+
+  useEffect(() => {
+    if (isEdit) return;
+
+    const loadNext = async () => {
+      const res = await fetch(`${baseUrl}/proiectfotovoltaice/next-numbers`);
+      const data = await res.json();
+
+      setField("nrProiect", String(data.nrProiect));
+      setField("nrPV", String(data.nrPV));
+    };
+
+    loadNext();
+  }, [isEdit]);
 
   const [form, setForm] = useState({
     clientID: "",
@@ -341,6 +363,9 @@ console.log(payload)
       {result.message && (
         <div
           style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 1000,
             padding: 12,
             borderRadius: 8,
             marginBottom: 12,
@@ -476,6 +501,9 @@ console.log(payload)
                     onChange={(v) =>
                       updateListItem("dateInvertoare", idx, "nume", v)
                     }
+                    onSelectSuggestion={(s)=>{
+                      updateListItem("dateInvertoare",idx,"putereInstalata",String(s.putereInstalata))
+                    }}
                   />
                 </td>
                 <td>
@@ -533,6 +561,9 @@ console.log(payload)
                     onChange={(v) =>
                       updateListItem("datePanouri", idx, "nume", v)
                     }
+                    onSelectSuggestion={(s)=>{
+                      updateListItem("datePanouri",idx,"putereInstalata",String(s.putereInstalata))
+                    }}
                   />
 
                 </td>
@@ -556,7 +587,7 @@ console.log(payload)
                     placeholder="ex: 0.55"
                   />
                 </td>
-                <td>
+                <td style={{ minWidth: 400 }}>
                   <input value={row.serie} onChange={(e) => updateListItem("datePanouri", idx, "serie", e.target.value)} style={styles.input} />
                 </td>
                 <td style={{ textAlign: "right" }}>
@@ -592,6 +623,10 @@ console.log(payload)
                     onChange={(v) =>
                       updateListItem("dateBaterii", idx, "nume", v)
                     }
+                    onSelectSuggestion={(s)=>{
+                      updateListItem("dateBaterii",idx,"putereInstalata",String(s.putereInstalata))
+                      updateListItem("dateBaterii",idx,"capacitate",String(s.capacitate))
+                    }}
                   />
                 </td>
                 <td>
@@ -649,8 +684,30 @@ console.log(payload)
 
         <Section title="Accesorii">
           <Grid>
-            <Input label="Sistem Backup" value={form.backup} onChange={(v) => setField("backup", v)} placeholder="ex: Huawei SmartGuard-63A-T0" />
-            <Input label="Smart Meter" value={form.smartMeter} onChange={(v) => setField("smartMeter", v)} placeholder="ex: Huawei Smart Meter DTSU666-H" />
+               <div>
+              <label style={styles.label}>Sistem Backup</label>
+              <AutoCompleteInput
+                value={form.backup}
+                suggestions={sugestiiBackup}
+                placeholder="ex: Huawei SmartGuard-63A-T0"
+                onChange={(v) => setField("backup", v)}
+                onSelectSuggestion={(s) =>
+                  setField("backup", typeof s === "string" ? s : s.model)
+                }
+              />
+            </div>
+            <div>
+              <label style={styles.label}>Smart Meter</label>
+              <AutoCompleteInput
+                value={form.smartMeter}
+                suggestions={sugestiiSmartMeter}
+                placeholder="ex: Huawei Smart Meter DTSU666-H"
+                onChange={(v) => setField("smartMeter", v)}
+                onSelectSuggestion={(s) =>
+                  setField("smartMeter", typeof s === "string" ? s : s.model)
+                }
+              />
+            </div>
           </Grid>
 
         </Section>
@@ -792,28 +849,55 @@ const styles = {
 function AutoCompleteInput({
   value,
   onChange,
-  suggestions,
+  suggestions = [],
+  onSelectSuggestion,
   labelKey = "model",
   placeholder,
 }) {
   const inputRef = React.useRef(null);
-  const [open, setOpen] = useState(false);
-  const [rect, setRect] = useState(null);
+  const [open, setOpen] = React.useState(false);
+  const [rect, setRect] = React.useState(null);
 
-  const filtered = useMemo(() => {
+  const getLabel = (item) => {
+    if (typeof item === "string") return item;
+    return item?.[labelKey] ?? "";
+  };
+
+  const filtered = React.useMemo(() => {
     if (!value) return [];
     return suggestions
-      .filter(s =>
-        s[labelKey]?.toLowerCase().includes(value.toLowerCase())
-      )
+      .filter((s) => getLabel(s).toLowerCase().includes(value.toLowerCase()))
       .slice(0, 8);
   }, [value, suggestions, labelKey]);
 
-  const openList = () => {
+  const updatePosition = React.useCallback(() => {
+    if (!inputRef.current) return;
     const r = inputRef.current.getBoundingClientRect();
-    setRect(r);
+    setRect({
+      top: r.bottom + 4,
+      left: r.left,
+      width: r.width,
+    });
+  }, []);
+
+  const openList = () => {
+    updatePosition();
     setOpen(true);
   };
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    const handleUpdate = () => updatePosition();
+
+    window.addEventListener("scroll", handleUpdate, true);
+    window.addEventListener("resize", handleUpdate);
+
+    return () => {
+      window.removeEventListener("scroll", handleUpdate, true);
+      window.removeEventListener("resize", handleUpdate);
+    };
+  }, [open, updatePosition]);
 
   return (
     <>
@@ -832,14 +916,15 @@ function AutoCompleteInput({
 
       {open &&
         rect &&
+        filtered.length > 0 &&
         createPortal(
           <div
             style={{
               position: "fixed",
-              top: rect.bottom + 4,
+              top: rect.top,
               left: rect.left,
               width: rect.width,
-              zIndex: 99999, // 🔥 peste TOT
+              zIndex: 99999,
               background: "#fff",
               borderRadius: 10,
               boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
@@ -847,27 +932,32 @@ function AutoCompleteInput({
               overflowY: "auto",
             }}
           >
-            {filtered.map((s) => (
-              <div
-                key={s.id ?? s[labelKey]}
-                onMouseDown={() => {
-                  onChange(s[labelKey]);
-                  setOpen(false);
-                }}
-                style={{
-                  padding: "8px 12px",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "#f5f5f5")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "transparent")
-                }
-              >
-                {s[labelKey]}
-              </div>
-            ))}
+            {filtered.map((s, index) => {
+              const label = getLabel(s);
+
+              return (
+                <div
+                  key={typeof s === "string" ? `${label}-${index}` : s.id ?? label}
+                  onMouseDown={() => {
+                    onChange(label);
+                    onSelectSuggestion?.(s);
+                    setOpen(false);
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#f5f5f5";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  {label}
+                </div>
+              );
+            })}
           </div>,
           document.body
         )}

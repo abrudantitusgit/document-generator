@@ -13,6 +13,7 @@ namespace InterfataActe.Interfaces
         List<Client> GetAllClienti();
         List<Client> GetAllClientiFirme();
         List<Client> CaietClient();
+        Client GetClientByCnp(long cnp);
 
 
     }

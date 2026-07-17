@@ -586,3 +586,11 @@ D:\acte-app\backend\InterfataActe\InterfataActe\obj\Debug\net8.0\scopedcss\bundl
 D:\acte-app\backend\InterfataActe\InterfataActe\obj\Debug\net8.0\InterfataActe.csproj.CopyComplete
 D:\acte-app\backend\InterfataActe\InterfataActe\obj\Debug\net8.0\InterfataActe.genruntimeconfig.cache
 D:\acte-app\backend\InterfataActe\InterfataActe\obj\Debug\net8.0\ref\InterfataActe.dll
+D:\acte-app\backend\InterfataActe\InterfataActe\bin\Debug\net8.0\ClosedXML.dll
+D:\acte-app\backend\InterfataActe\InterfataActe\bin\Debug\net8.0\ClosedXML.Parser.dll
+D:\acte-app\backend\InterfataActe\InterfataActe\bin\Debug\net8.0\DocumentFormat.OpenXml.dll
+D:\acte-app\backend\InterfataActe\InterfataActe\bin\Debug\net8.0\DocumentFormat.OpenXml.Framework.dll
+D:\acte-app\backend\InterfataActe\InterfataActe\bin\Debug\net8.0\ExcelNumberFormat.dll
+D:\acte-app\backend\InterfataActe\InterfataActe\bin\Debug\net8.0\RBush.dll
+D:\acte-app\backend\InterfataActe\InterfataActe\bin\Debug\net8.0\SixLabors.Fonts.dll
+D:\acte-app\backend\InterfataActe\InterfataActe\bin\Debug\net8.0\HtmlAgilityPack.dll

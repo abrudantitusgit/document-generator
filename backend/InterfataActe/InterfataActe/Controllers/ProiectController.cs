@@ -21,10 +21,14 @@ namespace InterfataActe.Controllers
             _proiect = proiect;
         }
 
+        [HttpPost("create")]
+        public IActionResult CreateProiect([FromBody] Proiect proiect)
+        {
+            if (proiect == null) return BadRequest("Body invalid");
 
-        [HttpPost(template:"create")]
-        public IActionResult CreateProiect(Proiect proiect)
-        {       
+            if (proiect.ClientID == Guid.Empty)
+                return BadRequest("Lipsa client");
+
             return Ok(_proiect.CreateProiect(proiect));
         }
 

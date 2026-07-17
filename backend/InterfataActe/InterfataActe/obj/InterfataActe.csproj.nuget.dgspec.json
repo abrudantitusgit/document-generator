@@ -42,9 +42,17 @@
               "target": "Package",
               "version": "[24.1.0, )"
             },
+            "ClosedXML": {
+              "target": "Package",
+              "version": "[0.105.0, )"
+            },
             "DocX": {
               "target": "Package",
               "version": "[2.5.0, )"
+            },
+            "HtmlAgilityPack": {
+              "target": "Package",
+              "version": "[1.12.4, )"
             },
             "Microsoft.AspNetCore.Cors": {
               "target": "Package",

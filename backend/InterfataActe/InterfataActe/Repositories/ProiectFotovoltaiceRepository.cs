@@ -32,6 +32,14 @@ namespace InterfataActe.Repositories
          {
                 return await _db.DataBaterie.GroupBy(u=>u.Model).Select(g=>g.First()).ToListAsync();
          }
+        public async Task<List<string>> GetSugestiiSmartMeter()
+         {
+                   return await _db.ProiecteFotovoltaice.Select(u => u.SmartMeter).Distinct().ToListAsync();
+         }
+        public async Task<List<string>> GetSugestiiBackup()
+         {
+                   return await _db.ProiecteFotovoltaice.Select(u => u.Backup).Distinct().ToListAsync();
+         }
         public async Task<List<ProiectFotovoltaice>> GetAllAsync(bool includeChildren = true,CancellationToken ct = default)
         {
             IQueryable<ProiectFotovoltaice> q = _db.ProiecteFotovoltaice
@@ -149,6 +157,19 @@ namespace InterfataActe.Repositories
         public Task<bool> ExistsAsync(Guid id, CancellationToken ct = default)
         {
             return _db.ProiecteFotovoltaice.AnyAsync(p => p.ID == id, ct);
+        }
+
+        public async Task<(long nextNrProiect, long nextNrPV)> GetNextNumbersAsync(CancellationToken ct = default)
+        {
+            var maxNrProiect = await _db.ProiecteFotovoltaice
+                .AsNoTracking()
+                .MaxAsync(p => (long?)p.NrProiect, ct) ?? 0;
+
+            var maxNrPV = await _db.ProiecteFotovoltaice
+                .AsNoTracking()
+                .MaxAsync(p => (long?)p.NrPV, ct) ?? 0;
+
+            return (maxNrProiect + 1, maxNrPV + 1);
         }
     }
 }

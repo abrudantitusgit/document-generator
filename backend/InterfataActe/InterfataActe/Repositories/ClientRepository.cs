@@ -31,15 +31,19 @@ namespace InterfataActe.Repositories
             _context.SaveChanges();
             return client;
         }
+        public Client GetClientByCnp(long cnp)
+        {
+            return _context.Clienti.FirstOrDefault(c => c.CNP == cnp);
+        }
 
         public List<Client> GetAllClienti()
         {
-            return _context.Clienti.ToList();
+            return _context.Clienti.OrderBy(x=>x.Nume).ToList();
         }
 
         public List<Client> GetAllClientiFirme()
         {
-            return _context.Clienti.Include(x => x.Firme).ToList();
+            return _context.Clienti.Include(x => x.Firme).OrderBy(x=>x.Nume).ToList();
         }
         public List<Client> CaietClient()
         {

@@ -16,7 +16,7 @@ export default function ProiecteFotovoltaiceList() {
   const [isEditOpen, setIsEditOpen]=useState(false);
   const [generating, setGenerating]=useState(null);
   const [isGenerateOpen, setIsGenerateOpen]=useState(false);
-  const [sortBy, setSortBy] = useState("data"); // data, nrProiect, client
+  const [sortBy, setSortBy] = useState("nrProiect"); // data, nrProiect, client
   const [sortDir, setSortDir] = useState("desc"); // asc, desc
   console.log("In Registru")
   
@@ -136,6 +136,26 @@ export default function ProiecteFotovoltaiceList() {
     });
   };
 
+const startAutocomplete = async (p) => {
+  try {
+    const res = await fetch("http://localhost:5001/autocomplete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(p)
+    });
+
+    const data = await res.json();
+
+    console.log(data);
+    return data;
+
+  } catch (err) {
+    console.error("Eroare:", err);
+  }
+};
+
 const onDelete = async (id) => {
   if (!window.confirm("Sigur ștergi proiectul?")) return;
 
@@ -157,15 +177,24 @@ const onDelete = async (id) => {
   }
 };
 
+  const handleExport =  () => {
+     const apiUrl =`${baseUrl}/proiectfotovoltaice/export`;
+  // navigare directă către endpoint => download normal
+    window.location.assign(apiUrl);
+  };
+
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
+    <div style={{ margin: "0 auto", padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0 }}>Proiecte Fotovoltaice</h2>
-        <Link to="/proiectfotovoltaice">
-        <button style={styles.btnAdd}>Adaugă Proiect</button>
-      </Link>
+
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+         <button style={styles.btn} onClick={handleExport}>Export Excel</button>
+         
+          <Link to="/proiectfotovoltaice">
+          <button style={styles.btnAdd}>Adaugă Proiect</button>
+         </Link>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -221,126 +250,166 @@ const onDelete = async (id) => {
         {loading ? "Se încarcă..." : `Rezultate: ${filtered.length} / ${items.length}`}
       </div>
 
-      <div style={{ marginTop: 12 }}>
-        {filtered.map((p) => {
-          const id = p.id || p.ID; // în funcție de serializer (camelCase / PascalCase)
-          const isOpen = expanded.has(id);
+    
 
+      <div style={{ marginTop: 12, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff" }}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Nr Proiect</th>
+              <th style={styles.th}>Nr PV</th>
+              <th style={styles.th}>Data</th>
+              <th style={styles.th}>Client</th>
+              <th style={styles.th}>CNP</th>
+              <th style={styles.th}>Firmă</th>
+              <th style={styles.th}>CUI</th>
+              <th style={styles.th}>Tip Sistem</th>
+              <th style={styles.th}>POD</th>
+              <th style={styles.th}>Adresă</th>
+              <th style={styles.th}>Telefon</th>
+              <th style={styles.th}>Panouri (kW)</th>
+              <th style={styles.th}>Invertor (kW)</th>
+              <th style={styles.th}>Baterii (Ah)</th>
+              <th style={styles.th}>PRM Masurat</th>
+              <th style={styles.th}>PRM Calculat</th>
+              <th style={styles.th}>Acțiuni</th>
+            </tr>
+          </thead>
 
-          return (
-            <div key={id} style={styles.card}>
-              <div style={{ display: "flex", gap: 12, alignItems: "flex-start", justifyContent: "space-between" }}>
-                <div style={{ flex: 1, minWidth: 260 }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 18, fontWeight: 800 }}>
-                      Nr Proiect: {p.nrProiect }
-                    </div>
-                    <div style={{ fontSize: 18, fontWeight: 800 }}>
-                      | Nr PV: {p.nrPV } 
-                    </div>
-                    <span style={styles.badge}>{p.tipSistem ?? "-"}</span>
-                    {p.pod  ? <span style={styles.badgeMuted}>POD: {p.pod }</span> : null}
-                  </div>
+          <tbody>
+            {filtered.map((p) => {
+              const id = p.id || p.ID;
+              const isOpen = expanded.has(id);
 
-                  <div style={{ marginTop: 6, color: "#444" }}>
-                    <b>Data:</b> {formatDate(p.data )}{" "}
-                    <span style={{ color: "#888" }}>•</span>{" "}
-                    <b>Client:</b> {p.client.nume ??"-"}
-                    {p.firmaID  ? (
-                      <>
-                        {" "}
-                        <span style={{ color: "#888" }}>•</span> <b>Firma:</b> {p.firma.nume}
-                      </>
-                    ) : null}
-                  </div>
+              const adresa =
+                [
+                  p.localitatea && `loc. ${p.localitatea}`,
+                  p.comuna && `com. ${p.comuna}`,
+                  p.strada && `str. ${p.strada}`,
+                  p.nrStrada && `nr. ${p.nrStrada}`,
+                  p.apartament && `ap. ${p.apartament}`,
+                  p.judet && `jud. ${p.judet}`,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "-";
 
-                  <div style={{ marginTop: 6, color: "#555" }}>
-                    <b>Adresă:</b>{" "}
-                    {[p.judet ?? p.Judet, p.localitatea , p.comuna , p.strada , p.nrStrada ]
-                      .filter(Boolean)
-                      .join(", ") || "-"}
-                  </div>
+              const panouriKw =
+                p.putereTotalaPanouri != null
+                  ? (Number(p.putereTotalaPanouri) / 1000).toFixed(3)
+                  : "-";
 
-                  <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <MiniStat label="Putere panouri" value={`${p.putereTotalaPanouri.toFixed(3)/1000} kW`} />
-                    <MiniStat label="Putere invertor" value={`${p.putereTotalaInvertor.toFixed(2)} kW`} />
-                    <MiniStat label="Capacitate baterii" value={`${p.capacitateTotalaBaterii.toFixed(2)} kWh`} />
-                    <MiniStat label="PRM măsurat" value={(p.prM_Masurat  ?? "-").toString()} />
-                    <MiniStat label="PRM calculat" value={(p.prM_Calculat  ?? "-").toString()} />
-                  </div>
-                </div>
+              const invertorKw =
+                p.putereTotalaInvertor != null
+                  ? Number(p.putereTotalaInvertor).toFixed(2)
+                  : "-";
 
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => toggle(id)} style={styles.btnPrimary}>
-                    {isOpen ? "Ascunde" : "Detalii"}
-                  </button>
+              const bateriiAh =
+                p.capacitateTotalaBaterii != null
+                  ? Number(p.capacitateTotalaBaterii).toFixed(2)
+                  : "-";
 
-                <button onClick={() => onDelete(id)} style={styles.btnDanger}>
-                  Șterge
-                </button>
+              return (
+                <React.Fragment key={id}>
+                  <tr style={{ borderTop: "1px solid #f1f1f1" }}>
+                    <td style={styles.td}>{p.nrProiect ?? "-"}</td>
+                    <td style={styles.td}>{p.nrPV ?? "-"}</td>
+                    <td style={styles.td}>{formatDate(p.data)}</td>
+                    <td style={styles.td}>{p.client?.nume ?? "-"}</td>
+                    <td style={styles.td}>{p.client?.cnp ?? "-"}</td>
+                    <td style={styles.td}>{p.firmaID ? (p.firma?.nume ?? "-") : "-"}</td>
+                    <td style={styles.td}>{p.firmaID ? (p.firma?.cui ?? "-") : "-"}</td>
+                    <td style={styles.td}>{p.tipSistem ?? "-"}</td>
+                    <td style={styles.td}>{p.pod ? p.pod : "-"}</td>
+                    <td style={styles.td}>{adresa}</td>
+                    <td style={styles.td}>{p.client?.telefon ?? "-"}</td>
+                    <td style={styles.td}>{panouriKw}</td>
+                    <td style={styles.td}>{invertorKw}</td>
+                    <td style={styles.td}>{bateriiAh}</td>
+                    <td style={styles.td}>{(p.prM_Masurat ?? "-").toString()}</td>
+                    <td style={styles.td}>{(p.prM_Calculat ?? "-").toString()}</td>
 
-                <button onClick={() => startEdit(p)} style={styles.btnEdit}>
-                  Edit
-                </button>
+                    <td style={{ ...styles.td, whiteSpace: "nowrap" }}>
+                      <button onClick={() => toggle(id)} style={styles.btnPrimary}>
+                        {isOpen ? "Ascunde" : "Detalii"}
+                      </button>{" "}
+                      <button onClick={() => onDelete(id)} style={styles.btnDanger}>
+                        Șterge
+                      </button>{" "}
+                      <button onClick={() => startEdit(p)} style={styles.btnEdit}>
+                        Edit
+                      </button>{" "}
+                      <button onClick={() => startGenerate(p)} style={styles.btnGenerate}>
+                        Generează Word
+                      </button>
+                    
+                     { /*<button onClick={() => startAutocomplete(p)} style={styles.btn}>
+                        Autocomplete Electrica
+                      </button>*/ }
+                    
+                    </td>
+                  </tr>
 
-                <button onClick={() => startGenerate(p)} style={styles.btnGenerate}>
-                  Genereaza
-                </button>
+                  {isOpen && (
+                   <tr>
+                  <td style={{padding: 12, background: "#ffffff" }} colSpan={17}>
+                      <div style={{display:"grid",width:"100%",gridTemplateColumns: "1fr 1fr",gap: 20,alignItems: "start"}}> 
+                          <DetailsBlock title="Invertoare">
+                            <SimpleTable
+                          
+                              headers={["Nume", "Nr", "Putere instalată (kW)", "Serie"]}
+                              rows={(p.dateInvertoare ?? []).map((x) => [
+                                x.model ?? "-",
+                                x.nrInvertoare ?? "-",
+                                x.putereInstalata ?? "-",
+                                x.serie ?? "-",
+                              ])}
+                              emptyText="Nu există invertoare."
+                            />
+                          </DetailsBlock>
 
-                </div>
-              </div>
-
-              {isOpen && (
-                <div style={{ marginTop: 12 }}>
-                  <DetailsBlock title="Invertoare">
-                    <SimpleTable
-                      headers={["Nume", "Nr", "Putere instalată (kW)","Serie"]}
-                      rows={(p.dateInvertoare ?? []).map((x) => [
-                        x.model ?? "-",
-                        x.nrInvertoare ?? "-",
-                        x.putereInstalata  ?? "-",
-                        x.serie ?? "-"
-                      ])}
-                      emptyText="Nu există invertoare."
-                    />
-                  </DetailsBlock>
-
-                  <DetailsBlock title="Panouri">
-                    <SimpleTable
-                      headers={["Nume","Nr panouri", "Putere panou (W)", "Serii", "Total (kW)"]}
-                      rows={(p.datePanouri ?? []).map((x) => {
-                        const nr = Number(x.nrPanouri  ?? 0);
-                        const pw = Number(x.putereInstalata ?? 0);
-                        return [x.model ?? "-",nr, pw,x.serie ?? "-", ((nr * pw)/1000).toFixed(3)];
-                      })}
-                      emptyText="Nu există panouri."
-                    />
-                  </DetailsBlock>
-
-                  <DetailsBlock title="Baterii">
-                    <SimpleTable
-                      headers={["Nume","Nr baterii", "Putere baterie (kW)", "Capacitate (Ah)","Serie"]}
-                      rows={(p.dateBaterii ?? []).map((x) => {
-                        const nr = Number(x.nrBaterii ?? x.NrBaterii ?? 0);
-                        const pw = Number(x.putereInstalata ?? x.PutereInstalata ?? 0);
-                        const cap = Number(x.capacitate ?? x.Capacitate ?? 0);
-                        return [x.model ?? "-",nr, pw, cap,x.serie ?? "-"];
-                      })}
-                      emptyText="Nu există baterii"
-                    />
-                  </DetailsBlock>
-                  <DetailsBlock title="Accesorii">
-                    <SimpleTable
-                      headers={["Sistem Backup","Smart Meter"]}
-                      rows={p.backup || p.smartMeter ? [[p.backup || "-", p.smartMeter || "-"]]: []}
-                      emptyText="Nu există"
-                    />
-                  </DetailsBlock>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                          <DetailsBlock title="Panouri">
+                            <SimpleTable
+                              headers={["Nume", "Nr panouri", "Putere panou (W)", "Serii", "Total (kW)"]}
+                              rows={(p.datePanouri ?? []).map((x) => {
+                                const nr = Number(x.nrPanouri ?? 0);
+                                const pw = Number(x.putereInstalata ?? 0);
+                                return [x.model ?? "-", nr, pw, x.serie ?? "-", ((nr * pw) / 1000).toFixed(3)];
+                              })}
+                              emptyText="Nu există panouri."
+                            />
+                          </DetailsBlock>
+             
+                          <DetailsBlock title="Baterii">
+                            <SimpleTable
+                              headers={["Nume", "Nr baterii", "Putere baterie (kW)", "Capacitate (Ah)", "Serie"]}
+                              rows={(p.dateBaterii ?? []).map((x) => {
+                                const nr = Number(x.nrBaterii ?? 0);
+                                const pw = Number(x.putereInstalata ?? 0);
+                                const cap = Number(x.capacitate ?? 0);
+                                return [x.model ?? "-", nr, pw, cap, x.serie ?? "-"];
+                              })}
+                              emptyText="Nu există baterii"
+                            />
+                          </DetailsBlock>
+                
+                          <DetailsBlock title="Accesorii">
+                            <SimpleTable
+                              headers={["Sistem Backup", "Smart Meter"]}
+                              rows={p.backup || p.smartMeter ? [[p.backup || "-", p.smartMeter || "-"]] : []}
+                              emptyText="Nu există"
+                            />
+                          </DetailsBlock>
+                 
+           </div>  
+                  
+                    </td>
+                  </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       <Modal
@@ -375,7 +444,7 @@ const onDelete = async (id) => {
 
 function DetailsBlock({ title, children }) {
   return (
-    <div style={{ borderTop: "1px solid #eee", paddingTop: 10, marginTop: 10 }}>
+    <div style={{ width:"100%",minWidth: 0, paddingTop: 10, paddingLeft:10, marginTop: 10,borderLeft: "1px solid #ddd", borderBottom: "1px solid #ddd"  }}>
       <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>{title}</div>
       {children}
     </div>
@@ -386,12 +455,18 @@ function SimpleTable({ headers, rows, emptyText }) {
   if (!rows || rows.length === 0) return <div style={{ color: "#666" }}>{emptyText}</div>;
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <div style={{overflowX: "auto" }}>
+      <table style={{width:"100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
             {headers.map((h) => (
-              <th key={h} style={styles.th}>
+                <th
+              key={h}
+              style={{
+                ...styles.th,
+                width: h === "Serii" ? 400 : "auto",   // aici o faci mai îngustă
+              }}
+            >
                 {h}
               </th>
             ))}
@@ -413,16 +488,29 @@ function SimpleTable({ headers, rows, emptyText }) {
   );
 }
 
-function MiniStat({ label, value }) {
-  return (
-    <div style={styles.miniStat}>
-      <div style={{ fontSize: 11, color: "#666" }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 800 }}>{value}</div>
-    </div>
-  );
-}
+
 
 const styles = {
+
+th: {
+  textAlign: "left",
+  padding: 12,
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#0d0e0e",
+  borderBottom: "1px solid #e5e7eb",
+  borderRight: "1px solid #f3f4f6",
+  whiteSpace: "nowrap",
+},
+
+td: {
+  padding: 12,
+  fontSize: 14,
+  fontWeight: 400,
+  color: "#111827",
+  borderRight: "1px solid #f3f4f6",
+  verticalAlign: "top",
+},
   modalBackdrop: {
   position: "fixed",
   inset: 0,
@@ -530,7 +618,5 @@ modal: {
     border: "1px solid #e74c3c",
     background: "#fdecea",
     cursor: "pointer",
-  },
-  th: { textAlign: "left", padding: 10, fontSize: 12, color: "#666", borderBottom: "1px solid #eee" },
-  td: { padding: 10, fontSize: 13 },
+  }
 };

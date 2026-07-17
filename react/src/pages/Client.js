@@ -16,44 +16,76 @@ const Client = () => {
       .then(data => setClienti(data)).catch(error=>console.log(error));
   },[]);
 
-    function Create(){
-        fetch(`${baseUrl}/client/create`, {
-            method: 'POST',
-            headers: {
-              "Content-Type": "application/json",
-              "Accept": "application/json"
-            },
-            body: JSON.stringify(client)
-          }).then(response => {
-            if (!response.ok) {
-             alert('Eroare');
-            }
-            else
-            {
-              setClient({});
-              alert('Salvat');
-            }
-          }).catch(error =>alert('Eroare'));
+  
+
+    function Create() {
+      fetch(`${baseUrl}/client/create`, {
+        method: 'POST',
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(client)
+      })
+      .then(async response => {
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
+
+        let mesaj = "Eroare necunoscută";
+
+        if (data?.message) {
+          mesaj = data.message;
+        }
+        else if (data?.errors) {
+          mesaj = Object.values(data.errors)
+            .flat()
+            .join("\n");
+        }
+
+        alert(mesaj);
+        return;
+      }
+
+        setClient({});
+        alert(data?.message || "Client salvat cu succes!");
+      })
+      .catch(() => alert('Eroare la server'));
     }
 
-    function Modify(){
-      fetch(`${baseUrl}/client/modifiy`, {
-          method: 'POST',
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-          },
-          body: JSON.stringify(modificaclient)
-        }).then(response => {
-          if (!response.ok) {
-           alert('Eroare');
-          }
-          else
-          {
-            setModificaClient({});
-            alert('Salvat');
-          }
-        }).catch(error =>alert('Eroare'));
+  function Modify() {
+    fetch(`${baseUrl}/client/modify`, { // <-- corectat
+      method: 'POST',
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(modificaclient)
+    })
+    .then(async response => {
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+
+        let mesaj = "Eroare necunoscută";
+
+        if (data?.message) {
+          mesaj = data.message;
+        }
+        else if (data?.errors) {
+          mesaj = Object.values(data.errors)
+            .flat()
+            .join("\n");
+        }
+
+        alert(mesaj);
+        return;
+      }
+
+      setModificaClient({});
+      alert(data?.message || "Client modificat cu succes!");
+    })
+    .catch(() => alert('Eroare la server'));
   }
 
     return (

@@ -6,9 +6,9 @@ services:
     container_name: interfataacte-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: interfataacte_user
-      POSTGRES_PASSWORD: interfataacte_password
-      POSTGRES_DB: interfataacte_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - interfataacte_db_data:/var/lib/postgresql/data
     ports:
@@ -30,12 +30,28 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:5000
-      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=interfataacte_db;Username=interfataacte_user;Password=interfataacte_password;SearchPath=first
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};SearchPath=first
     ports:
       - "5000:5000"
     networks:
       - app-network
     restart: unless-stopped
+
+  #flask:
+  #  build:
+  #    context: ./backend/AutoComplete
+  #    dockerfile: Dockerfile
+  #  container_name: interfataacte-flask
+  #  depends_on:
+  #    - db
+  #  environment:
+  #    - FLASK_ENV=development
+   #   - PORT=5001
+    #ports:
+     # - "5001:5001"
+    #networks:
+     # - app-network
+    #restart: unless-stopped
 
   frontend:
     build:
@@ -44,8 +60,10 @@ services:
     container_name: interfataacte-frontend
     depends_on:
       - backend
+     # - flask
     environment:
       - REACT_APP_API_URL=http://backend:5000
+      - REACT_APP_FLASK_URL=http://flask:5001
     ports:
       - "3000:3000"
     networks:
@@ -61,20 +79,21 @@ networks:
 volumes:
   interfataacte_db_data:
     external: true
+
   tempFolder_volume:
     driver_opts:
-     type: cifs
-     o: username=ramona,password=Alladin1.,domain=WORKGROUP,vers=3.0
-     device: //192.168.77.120/Share/Data/0. DATA/Public/Documente/TempWord
+      type: cifs
+      o: username=${CIFS_USERNAME},password=${CIFS_PASSWORD},domain=${CIFS_DOMAIN},vers=3.0
+      device: //192.168.77.168/Share/Data/0. DATA/Public/Documente/TempWord
+
   clientiBransamentFolder_volume:
     driver_opts:
-     type: cifs
-     o: username=ramona,password=Alladin1.,domain=WORKGROUP,vers=3.0
-     device: //192.168.77.120/Share/Data/0. DATA/001. BRANSAMENTE/000. Clienti
+      type: cifs
+      o: username=${CIFS_USERNAME},password=${CIFS_PASSWORD},domain=${CIFS_DOMAIN},vers=3.0
+      device: //192.168.77.168/Share/Data/0. DATA/001. BRANSAMENTE/000. Clienti
+
   clientiFotovoltaiceFolder_volume:
     driver_opts:
-     type: cifs
-     o: username=ramona,password=Alladin1.,domain=WORKGROUP,vers=3.0
-     device: //192.168.77.120/Share/Data/0. DATA/002. FOTOVOLTAICE/fOTOVOLTAICE
-
-
+      type: cifs
+      o: username=${CIFS_USERNAME},password=${CIFS_PASSWORD},domain=${CIFS_DOMAIN},vers=3.0
+      device: //192.168.77.168/Share/Data/0. DATA/002. FOTOVOLTAICE/fOTOVOLTAICE

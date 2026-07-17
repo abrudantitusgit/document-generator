@@ -40,92 +40,155 @@ public static class DocumentProcessor
 
     }
 
-    private static void ProcessNotificareAnexa2(DocX doc, ProiectFotovoltaice proiect)
+private static void ProcessNotificareAnexa2(DocX doc, ProiectFotovoltaice proiect)
+{
+    try
+    {
+        var tabel_panouri = doc.Tables[2];
+        var tabel_invertor = doc.Tables[3];
+
+        int insertIndexPanouri = tabel_panouri.Rows.Count - 1;
+        int insertIndexInvertor = tabel_invertor.Rows.Count - 1;
+
+        var modelRowPanouri = tabel_panouri.Rows[insertIndexPanouri - 1];
+        var modelRowInvertor = tabel_invertor.Rows[insertIndexInvertor - 1];
+
+        // header values
+        tabel_panouri.Rows[3].Cells[2].Paragraphs[0].Append((proiect.PutereTotalaPanouri / 1000).ToString());
+        tabel_panouri.Rows[3].Cells[3].Paragraphs[0].Append((proiect.PutereTotalaPanouri / 1000).ToString());
+        tabel_panouri.Rows[3].Cells[4].Paragraphs[0].Append("{{Proiect.PutereMax}}");
+
+        foreach (var panou in proiect.DatePanouri)
         {
-            try
-            {
-                var tabel_panouri = doc.Tables[2];
-                var tabel_invertor = doc.Tables[3];
+            var row = tabel_panouri.InsertRow(modelRowPanouri, insertIndexPanouri, true);
 
-                int insertIndexPanouri = tabel_panouri.Rows.Count - 1;
-                int insertIndexInvertor = tabel_invertor.Rows.Count - 1;
+            row.Cells[1].Paragraphs[0].Append(panou.NrPanouri.ToString());
+            row.Cells[2].Paragraphs[0].Append(panou.Model);
+            row.Cells[3].Paragraphs[0].Append(panou.PutereInstalata.ToString());
+            row.Cells[4].Paragraphs[0].Append((panou.NrPanouri * panou.PutereInstalata / 1000).ToString());
+            row.Cells[5].Paragraphs[0].Append((panou.NrPanouri * panou.PutereInstalata / 1000).ToString());
+            row.Cells[6].Paragraphs[0].Append(
+                Math.Min((panou.NrPanouri * panou.PutereInstalata / 1000), proiect.PutereTotalaInvertor).ToString()
+            );
 
-                var modelRowPanouri = tabel_panouri.Rows[insertIndexPanouri - 1];
-                var modelRowInvertor = tabel_invertor.Rows[insertIndexInvertor - 1];
-
-                foreach (var panou in proiect.DatePanouri)
-                {
-                    var row = tabel_panouri.InsertRow(modelRowPanouri, insertIndexPanouri, true);
-                    insertIndexPanouri++;
-                }
-
-                int removeIndexPanouri = insertIndexPanouri - proiect.DatePanouri.Count - 1;
-
-                if (removeIndexPanouri >= 0 && removeIndexPanouri < tabel_panouri.Rows.Count)
-                    tabel_panouri.RemoveRow(removeIndexPanouri);
-
-                foreach (var inv in proiect.DateInvertoare)
-                {
-                    var row = tabel_invertor.InsertRow(modelRowInvertor, insertIndexInvertor, true);
-                    insertIndexInvertor++;
-                }
-
-                int removeIndexInvertor = insertIndexInvertor - proiect.DateInvertoare.Count - 1;
-
-                if (removeIndexInvertor >= 0 && removeIndexInvertor < tabel_invertor.Rows.Count)
-                    tabel_invertor.RemoveRow(removeIndexInvertor);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("EROARE ProcessNotificareAnexa2:");
-                Console.WriteLine(ex.ToString());
-                throw; // foarte important - ca să vezi eroarea și sus în flow
-            }
+            insertIndexPanouri++;
         }
 
+        // remove model row (as in your code)
+        int removeIndexPanouri = insertIndexPanouri - proiect.DatePanouri.Count - 1;
+        Console.WriteLine($"[Anexa2] removeIndexPanouri={removeIndexPanouri}, rows={tabel_panouri.Rows.Count}");
 
-   private static void ProcessNotificareAnexa1(DocX doc, ProiectFotovoltaice proiect)
+        if (removeIndexPanouri >= 0 && removeIndexPanouri < tabel_panouri.Rows.Count)
+            tabel_panouri.RemoveRow(removeIndexPanouri);
+        else
+            Console.WriteLine($"[Anexa2] ATENTIE: removeIndexPanouri invalid: {removeIndexPanouri}");
+
+        // header values invertor
+        tabel_invertor.Rows[3].Cells[1].Paragraphs[0].Append(proiect.PutereTotalaInvertor.ToString());
+        tabel_invertor.Rows[3].Cells[2].Paragraphs[0].Append(proiect.PutereTotalaInvertor.ToString());
+        tabel_invertor.Rows[3].Cells[3].Paragraphs[0].Append("{{Proiect.PutereMax}}");
+
+        foreach (var inv in proiect.DateInvertoare)
         {
-            try
-            {
-                var tabel_panouri = doc.Tables[5];
-                var tabel_invertor = doc.Tables[6];
+            var row = tabel_invertor.InsertRow(modelRowInvertor, insertIndexInvertor, true);
 
-                int insertIndexPanouri = tabel_panouri.Rows.Count;
-                int insertIndexInvertor = tabel_invertor.Rows.Count - 1;
+            row.Cells[1].Paragraphs[0].Append(inv.NrInvertoare.ToString());
+            row.Cells[2].Paragraphs[0].Append(
+                proiect.TipSistem == "Monofazat" ? "Monofazat,\n" + inv.Model : "Trifazat,\n" + inv.Model
+            );
+            row.Cells[3].Paragraphs[0].Append(proiect.TipSistem == "Monofazat" ? "230" : "400");
+            row.Cells[4].Paragraphs[0].Append(inv.PutereInstalata.ToString());
+            row.Cells[5].Paragraphs[0].Append(inv.PutereInstalata.ToString());
+            row.Cells[6].Paragraphs[0].Append("{{Proiect.PutereMax}}");
 
-                var modelRowPanouri = tabel_panouri.Rows[insertIndexPanouri - 1];
-                var modelRowInvertor = tabel_invertor.Rows[insertIndexInvertor - 1];
-
-                foreach (var panou in proiect.DatePanouri)
-                {
-                    var row = tabel_panouri.InsertRow(modelRowPanouri, insertIndexPanouri, true);
-                    insertIndexPanouri++;
-                }
-
-                int removeIndexPanouri = insertIndexPanouri - proiect.DatePanouri.Count - 1;
-
-                if (removeIndexPanouri >= 0 && removeIndexPanouri < tabel_panouri.Rows.Count)
-                    tabel_panouri.RemoveRow(removeIndexPanouri);
-
-                foreach (var inv in proiect.DateInvertoare)
-                {
-                    var row = tabel_invertor.InsertRow(modelRowInvertor, insertIndexInvertor, true);
-                    insertIndexInvertor++;
-                }
-
-                int removeIndexInvertor = insertIndexInvertor - proiect.DateInvertoare.Count - 1;
-
-                if (removeIndexInvertor >= 0 && removeIndexInvertor < tabel_invertor.Rows.Count)
-                    tabel_invertor.RemoveRow(removeIndexInvertor);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("EROARE ProcessNotificareAnexa1:");
-                Console.WriteLine(ex.ToString());
-                throw;
-            }
+            insertIndexInvertor++;
         }
+
+        int removeIndexInvertor = insertIndexInvertor - proiect.DateInvertoare.Count - 1;
+        Console.WriteLine($"[Anexa2] removeIndexInvertor={removeIndexInvertor}, rows={tabel_invertor.Rows.Count}");
+
+        if (removeIndexInvertor >= 0 && removeIndexInvertor < tabel_invertor.Rows.Count)
+            tabel_invertor.RemoveRow(removeIndexInvertor);
+        else
+            Console.WriteLine($"[Anexa2] ATENTIE: removeIndexInvertor invalid: {removeIndexInvertor}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("EROARE ProcessNotificareAnexa2:");
+        Console.WriteLine(ex.ToString());
+        throw;
+    }
+}
+
+
+  private static void ProcessNotificareAnexa1(DocX doc, ProiectFotovoltaice proiect)
+{
+    try
+    {
+        var tabel_panouri = doc.Tables[5];
+        var tabel_invertor = doc.Tables[6];
+
+        int insertIndexPanouri = tabel_panouri.Rows.Count;
+        int insertIndexInvertor = tabel_invertor.Rows.Count - 1;
+
+        var modelRowPanouri = tabel_panouri.Rows[insertIndexPanouri - 1];
+        var modelRowInvertor = tabel_invertor.Rows[insertIndexInvertor - 1];
+
+        foreach (var panou in proiect.DatePanouri)
+        {
+            var row = tabel_panouri.InsertRow(modelRowPanouri, insertIndexPanouri, true);
+
+            row.Cells[1].Paragraphs[0].Append(panou.NrPanouri.ToString());
+            row.Cells[2].Paragraphs[0].Append(panou.Model);
+            row.Cells[3].Paragraphs[0].Append(panou.PutereInstalata.ToString());
+            row.Cells[4].Paragraphs[0].Append((panou.NrPanouri * panou.PutereInstalata / 1000).ToString());
+            row.Cells[5].Paragraphs[0].Append((panou.NrPanouri * panou.PutereInstalata / 1000).ToString());
+            row.Cells[6].Paragraphs[0].Append(
+                Math.Min((panou.NrPanouri * panou.PutereInstalata / 1000), proiect.PutereTotalaInvertor).ToString()
+            );
+
+            insertIndexPanouri++;
+        }
+
+        int removeIndexPanouri = insertIndexPanouri - proiect.DatePanouri.Count - 1;
+        Console.WriteLine($"[Anexa1] removeIndexPanouri={removeIndexPanouri}, rows={tabel_panouri.Rows.Count}");
+
+        if (removeIndexPanouri >= 0 && removeIndexPanouri < tabel_panouri.Rows.Count)
+            tabel_panouri.RemoveRow(removeIndexPanouri);
+        else
+            Console.WriteLine($"[Anexa1] ATENTIE: removeIndexPanouri invalid: {removeIndexPanouri}");
+
+        foreach (var inv in proiect.DateInvertoare)
+        {
+            var row = tabel_invertor.InsertRow(modelRowInvertor, insertIndexInvertor, true);
+
+            row.Cells[1].Paragraphs[0].Append(inv.NrInvertoare.ToString());
+            row.Cells[2].Paragraphs[0].Append(
+                proiect.TipSistem == "Monofazat" ? "Monofazat,\n" + inv.Model : "Trifazat,\n" + inv.Model
+            );
+            row.Cells[3].Paragraphs[0].Append(proiect.TipSistem == "Monofazat" ? "230" : "400");
+            row.Cells[4].Paragraphs[0].Append(inv.PutereInstalata.ToString());
+            row.Cells[5].Paragraphs[0].Append(inv.PutereInstalata.ToString());
+            row.Cells[6].Paragraphs[0].Append("{{Proiect.PutereMax}}");
+
+            insertIndexInvertor++;
+        }
+
+        int removeIndexInvertor = insertIndexInvertor - proiect.DateInvertoare.Count - 1;
+        Console.WriteLine($"[Anexa1] removeIndexInvertor={removeIndexInvertor}, rows={tabel_invertor.Rows.Count}");
+
+        if (removeIndexInvertor >= 0 && removeIndexInvertor < tabel_invertor.Rows.Count)
+            tabel_invertor.RemoveRow(removeIndexInvertor);
+        else
+            Console.WriteLine($"[Anexa1] ATENTIE: removeIndexInvertor invalid: {removeIndexInvertor}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("EROARE ProcessNotificareAnexa1:");
+        Console.WriteLine(ex.ToString());
+        throw;
+    }
+}
 
 
         private static void ProcessComunicare(DocX doc, ProiectFotovoltaice proiect)
@@ -265,13 +328,13 @@ public static class DocumentProcessor
 
              foreach (var panou in proiect.DatePanouri)
             {
-                 sbPanouri.Append($"- {panou.NrPanouri} Bucati panouri fotovoltaice, puterea {panou.PutereInstalata}W, Marca {panou.Model}\n");
+                 sbPanouri.Append($"- {panou.NrPanouri} Bucati panouri fotovoltaice, puterea {panou.PutereInstalata}W, Marca {panou.Model}, serii: {panou.Serie}\n");
 
             }
                
             foreach (var inv in proiect.DateInvertoare)
             {
-                sbInvertor.Append($"- {inv.NrInvertoare} buc. Invertor {proiect.TipSistem} Marca {inv.Model}, {inv.PutereInstalata} kW\n");
+                sbInvertor.Append($"- {inv.NrInvertoare} buc. Invertor {proiect.TipSistem} Marca {inv.Model} {inv.PutereInstalata} kW, serie: {inv.Serie}\n");
 
             }
                 
@@ -279,13 +342,13 @@ public static class DocumentProcessor
             {
             foreach (var bat in proiect.DateBaterii)
                 {     
-                    sbBaterie.Append($"- {bat.NrBaterii} buc. Baterie de Stocare, Marca {bat.Model} {bat.PutereInstalata} kW\n");
+                    sbBaterie.Append($"- {bat.NrBaterii} buc. Baterie de Stocare, Marca {bat.Model} {bat.PutereInstalata} kW, serie: {bat.Serie}\n");
                     sbBaterie.Append($"- 1 buc. Modul de incarcare al Bateriei de Stocare, Marca {bat.Model}\n");   
                 }
                descriereBaterie.ReplaceText("{{DESCRIERE_BATERIE}}", sbBaterie.ToString()); 
             }
             else descriereBaterie.Remove(false);
-            if (proiect.Backup != "")
+           if (!string.IsNullOrWhiteSpace(proiect.Backup) && proiect.Backup != "-")
             {
                 sbBackup.Append($"1 buc. Modul de Backup, Marca {proiect.Backup}");
                 descriereBackup.ReplaceText("{{DESCRIERE_BACKUP}}", sbBackup.ToString());

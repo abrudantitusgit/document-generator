@@ -11,6 +11,8 @@ namespace InterfataActe.Interfaces
          Task<List<InterfataActe.Models.DataInvertor>> GetSugestiiInvertoare();
          Task<List<InterfataActe.Models.DataPanou>> GetSugestiiPanouri();
          Task<List<InterfataActe.Models.DataBaterie>> GetSugestiiBaterii();
+         Task<List<string>> GetSugestiiSmartMeter();
+        Task<List<string>> GetSugestiiBackup();
         Task<List<InterfataActe.Models.ProiectFotovoltaice>> GetAllAsync(bool includeChildren = true,CancellationToken ct = default);
         Task<InterfataActe.Models.ProiectFotovoltaice> GetByIdAsync(Guid id, bool includeChildren = true, CancellationToken ct = default);
 
@@ -20,5 +22,6 @@ namespace InterfataActe.Interfaces
         Task<ProiectFotovoltaice> UpdateAsync(InterfataActe.Models.ProiectFotovoltaice entity, CancellationToken ct = default);
         Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
         Task<bool> ExistsAsync(Guid id, CancellationToken ct = default);
+        Task<(long nextNrProiect, long nextNrPV)> GetNextNumbersAsync(CancellationToken ct = default);
     }
 }

@@ -8,9 +8,9 @@ namespace InterfataActe.Models
     {
         [Key]
         public Guid ID { get; set; }
-        [Required]
+        [Required(ErrorMessage = "Numele este obligatoriu.")]
         public string Nume { get; set; }
-        [Required]
+        [Required(ErrorMessage = "CNP-ul este obligatoriu.")]
         public long CNP { get; set; }
         public string Eliberat { get; set; }
         public DateTime DataBuletin { get; set; }

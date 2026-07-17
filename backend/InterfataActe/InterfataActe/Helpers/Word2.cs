@@ -42,8 +42,8 @@ namespace InterfataActe.Helpers
 
             var buletinCablu = proiect.ContorBuletinCabluri.Where(x => x.Tag == "BuletinCablu" || x.Tag=="BuletinCabluManual").FirstOrDefault() == null ? 0 : proiect.ContorBuletinCabluri.Where(x => x.Tag == "BuletinCablu" || x.Tag == "BuletinCabluManual").FirstOrDefault().Contor;
             var buletinPriza = proiect.ContorBuletinPrize.Where(x => x.Tag == "BuletinPriza" || x.Tag == "BuletinPrizaManual").FirstOrDefault() == null ? 0 : proiect.ContorBuletinPrize.Where(x => x.Tag == "BuletinPriza" || x.Tag == "BuletinPrizaManual").FirstOrDefault().Contor;
-            var buletinCabluUtilizare = proiect.ContorBuletinCabluri.Where(x => x.Tag == "BuletinCabluUtilizare").FirstOrDefault() == null ? 0 : proiect.ContorBuletinCabluri.Where(x => x.Tag == "BuletinCabluUtilizare").FirstOrDefault().Contor;
-            var buletinPrizaUtilizare = proiect.ContorBuletinPrize.Where(x => x.Tag == "BuletinPrizaUtilizare").FirstOrDefault() == null ? 0 : proiect.ContorBuletinPrize.Where(x => x.Tag == "BuletinPrizaUtilizare").FirstOrDefault().Contor;
+            var buletinCabluUtilizare = proiect.ContorBuletinCabluri.Where(x => x.Tag == "BuletinCabluUtilizare" || x.Tag=="BuletinCabluManual").FirstOrDefault() == null ? 0 : proiect.ContorBuletinCabluri.Where(x => x.Tag == "BuletinCabluUtilizare" || x.Tag=="BuletinCabluManual").FirstOrDefault().Contor;
+            var buletinPrizaUtilizare = proiect.ContorBuletinPrize.Where(x => x.Tag == "BuletinPrizaUtilizare" || x.Tag == "BuletinPrizaManual").FirstOrDefault() == null ? 0 : proiect.ContorBuletinPrize.Where(x => x.Tag == "BuletinPrizaUtilizare"|| x.Tag == "BuletinPrizaManual").FirstOrDefault().Contor;
             Console.WriteLine(buletinPriza);
             foreach (var fold in grup.Foldere)
 
@@ -474,7 +474,7 @@ paragraph.ReplaceText("<Proiect.DataPlus>", proiect.Data.AddMonths(1).ToString("
                           if (File.Exists(pathload))
                             {
                                 Console.WriteLine(pathload);      
-                                var folderPath = $"/mnt/share/clientiFotovoltaice/{proiect.Client.Nume}/{grup.Nume}/{proiect.NrProiect}.Proiect/{fold.Nume}";
+                                var folderPath = $"/mnt/share/clientiFotovoltaice/{proiect.Client.Nume}/{proiect.NrProiect}.Proiect/{fold.Nume}";
                                 
                                 var path = $"{folderPath}/{templateName}";
                                 

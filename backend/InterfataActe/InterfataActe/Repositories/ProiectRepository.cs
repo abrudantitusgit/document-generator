@@ -84,20 +84,20 @@ namespace InterfataActe.Repositories
                 {
                     var dto = new DTORegistru
                     {
-                        NrProiect = proiect.NrProiect.ToString(),
+                        NrProiect = proiect.NrProiect.ToString() ?? "",
                         NumeClient = proiect.Client?.Nume ?? "",
-                        NumeFirma = proiect.Firma?.Nume ?? "",
-                        NrAtr = (proiect.Atr?.NrAtr.ToString() ?? "") + (proiect.Atr?.DataAtr.ToString("dd.MM.yyyy") ?? ""),
+                        NumeFirma  = proiect.Firma?.Nume ?? "",
+                        NrAtr =(proiect.Atr?.NrAtr.ToString() ?? "") + (proiect.Atr?.DataAtr.ToString("dd.MM.yyyy") ?? ""),
                         Denumire = proiect.Denumire ?? "",
                         Pret = proiect.Atr?.Pret.ToString() ?? "",
                         Localitatea = proiect.Localitatea ?? "",
                         Strada = proiect.Strada ?? "",
-                        NrStrada = proiect.NrStrada.ToString(),
+                        NrStrada = proiect.NrStrada?.ToString() ?? "",
                         Apartament = proiect.Apartament ?? "",
-                        Data = proiect.Data.ToString("dd.MM.yyyy"),
+                        Data = proiect.Data.ToString("dd.MM.yyyy") ?? "",
                         Contract = proiect.ContorContract?.Contor.ToString() ?? "",
                         ProcesVerbal = proiect.ContorProcesVerbal?.Contor.ToString() ?? "",
-                        ProcesVerbalCablu = (proiect.ContorProcesVerbal?.Contor.ToString() ?? "") + "A",
+                        ProcesVerbalCablu =(proiect.ContorProcesVerbal?.Contor.ToString() ?? "") + "A",
                         BuletinCablu = GetContorString(proiect.ContorBuletinCabluri),
                         BuletinPriza = GetContorString(proiect.ContorBuletinPrize)
                     };
