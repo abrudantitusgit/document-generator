@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Cors;
 using InterfataActe.Interfaces;
 using InterfataActe.Models;
+using InterfataActe.Brockers;
 
 namespace InterfataActe.Controllers
 {
@@ -15,10 +16,12 @@ namespace InterfataActe.Controllers
     public class GrupController : Controller
     {
         public readonly IGrupRepository _grup;
+        private readonly InterfataActeBrocker _database;
 
-        public GrupController(IGrupRepository grup)
+        public GrupController(IGrupRepository grup, InterfataActeBrocker database)
         {
             _grup = grup;
+            _database = database;
         }
 
         [HttpPost(template: "create")]
@@ -48,6 +51,16 @@ namespace InterfataActe.Controllers
         public IActionResult UpdateGrup(Grup grup)
         {
             return Ok(_grup.UpdateGrup(grup));
+        }
+
+        [HttpDelete("{id:guid}")]
+        public IActionResult DeleteGrup(Guid id)
+        {
+            var grup = _database.Grupe.Find(id);
+            if (grup == null) return NotFound(new { message = "Grupul nu a fost găsit." });
+            _database.Grupe.Remove(grup);
+            _database.SaveChanges();
+            return NoContent();
         }
 
     }

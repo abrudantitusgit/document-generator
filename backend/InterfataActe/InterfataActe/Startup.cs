@@ -17,6 +17,7 @@ using InterfataActe.Interfaces;
 using InterfataActe.Helpers;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using InterfataActe.Services;
+using System.Text.Json;
 
 namespace InterfataActe
 {
@@ -32,7 +33,12 @@ namespace InterfataActe
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddControllers();
+            services.AddControllers().AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                options.JsonSerializerOptions.DictionaryKeyPolicy = JsonNamingPolicy.CamelCase;
+                options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+            });
 
             services.AddEntityFrameworkNpgsql().AddDbContext<InterfataActeBrocker>(opt => opt.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), o => o.MigrationsHistoryTable("__EFMigrationsHistory", "first")));
 

@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Cors;
 using InterfataActe.Interfaces;
 using InterfataActe.Models;
+using InterfataActe.Brockers;
+using Microsoft.EntityFrameworkCore;
 
 namespace InterfataActe.Controllers
 {
@@ -20,8 +22,9 @@ namespace InterfataActe.Controllers
         private readonly IProiectContorContractRepository _contorcontract;
         private readonly IProiectContorProcesVerbalRepository _contorprocesverbal;
         private readonly IProiectRepository _proiect;
+        private readonly InterfataActeBrocker _database;
 
-        public AtrController(IAtrRepository atr, IProiectContorBuletinCabluRepository contorbuletincablu, IProiectContorBuletinPrizaRepository contorbuletinpriza, IProiectContorContractRepository contorcontract, IProiectContorProcesVerbalRepository contorprocesverbal, IProiectRepository proiect)
+        public AtrController(IAtrRepository atr, IProiectContorBuletinCabluRepository contorbuletincablu, IProiectContorBuletinPrizaRepository contorbuletinpriza, IProiectContorContractRepository contorcontract, IProiectContorProcesVerbalRepository contorprocesverbal, IProiectRepository proiect, InterfataActeBrocker database)
         {
             _atr = atr;
             _contorbuletincablu = contorbuletincablu;
@@ -29,6 +32,7 @@ namespace InterfataActe.Controllers
             _contorcontract = contorcontract;
             _contorprocesverbal = contorprocesverbal;
             _proiect = proiect;
+            _database = database;
         }
 
         [HttpPost(template: "create")]
@@ -66,6 +70,16 @@ namespace InterfataActe.Controllers
         public IActionResult CreateAtrManual(Atr atr)
         {
             return Ok(_atr.CreateAtr(atr));
+        }
+
+        [HttpDelete("{id:guid}")]
+        public IActionResult DeleteAtr(Guid id)
+        {
+            var atr = _database.Atr.Find(id);
+            if (atr == null) return NotFound(new { message = "ATR-ul nu a fost găsit." });
+            _database.Atr.Remove(atr);
+            _database.SaveChanges();
+            return NoContent();
         }
 
 

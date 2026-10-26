@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using InterfataActe.Interfaces;
 using InterfataActe.Models;
+using InterfataActe.Brockers;
 
 namespace InterfataActe.Controllers
 {
@@ -23,10 +24,12 @@ namespace InterfataActe.Controllers
 
         //   public readonly IEmailSender _email;
         private readonly IEmailRepository _email;
+        private readonly InterfataActeBrocker _database;
 
-        public EmailController(IEmailRepository email)
+        public EmailController(IEmailRepository email, InterfataActeBrocker database)
         {
             _email = email;
+            _database = database;
         }
         /*
                 public EmailController(IEmailSender email)
@@ -59,6 +62,29 @@ namespace InterfataActe.Controllers
         public IActionResult List()
         {
             return Ok(_email.List());
+        }
+
+        [HttpPut("{id:guid}")]
+        public IActionResult UpdateEmail(Guid id, Email input)
+        {
+            var email = _database.Emails.Find(id);
+            if (email == null) return NotFound(new { message = "E-mailul nu a fost găsit." });
+            email.Adresa = input.Adresa;
+            email.Text = input.Text;
+            email.Data = input.Data;
+            email.Activ = input.Activ;
+            _database.SaveChanges();
+            return Ok(email);
+        }
+
+        [HttpDelete("{id:guid}")]
+        public IActionResult RemoveEmail(Guid id)
+        {
+            var email = _database.Emails.Find(id);
+            if (email == null) return NotFound(new { message = "E-mailul nu a fost găsit." });
+            _database.Emails.Remove(email);
+            _database.SaveChanges();
+            return NoContent();
         }
 
 

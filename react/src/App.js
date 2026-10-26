@@ -1,54 +1,34 @@
-import {Route, Switch} from "react-router-dom";
-import { CSSTransition, TransitionGroup} from 'react-transition-group';
+import React from "react";
+import { Redirect, Route, Switch } from "react-router-dom";
 import Dashboard from "./components/Dashboard";
 import Acasa from "./pages/Acasa";
-import Atr from "./pages/Atr";
-import Client from "./pages/Client";
-import Email from "./pages/Email";
-import Firma from "./pages/Firma";
-import Proiect from "./pages/Proiect";
 import Word from "./pages/Word";
 import RegistruATR from "./pages/RegistruATR";
-import Grup from "./pages/Grup";
-import Folder from "./pages/Folder";
-import Fisier from "./pages/Fisier";
-import ClientContor from "./pages/ClientContor";
-import ProiectFotovoltaice from "./pages/ProiectFotovoltaice";
-import RegistruFotovoltaice from "./pages/RegistruFotovoltaice"
-import "./css/app/app.css"
+import RegistruFotovoltaice from "./pages/RegistruFotovoltaice";
+import ResourceWorkspace from "./components/ResourceWorkspace";
+import { resourceDefinitions } from "./pages/resourceDefinitions";
+import "./css/app/app.css";
 
-function App() {
+export default function App() {
   return (
-  <div className="App">
-    <Dashboard/>
-  <div className="page">
-    <Route render={({location})=>(
-      <TransitionGroup>
-          <CSSTransition key={location.key} classNames="fade">
-            <Switch location={location}>
-              <Route exact path="/" component={Acasa}/>
-              <Route path="/atr" component={Atr} />
-              <Route path="/client" component={Client}/>
-              <Route path="/email" component={Email}/>
-              <Route path="/firma" component={Firma}/>
-              <Route path="/proiect" component={Proiect}/>
-              <Route exact path="/proiectfotovoltaice" component={ProiectFotovoltaice}/>
-              <Route exact path="/registrufotovoltaice" component={RegistruFotovoltaice}/>
-              <Route path="/word" component={Word}/>
-              <Route path="/registruatr" component={RegistruATR}/>
-              <Route path="/grup" component={Grup}/>
-              <Route path="/folder" component={Folder}/>
-              <Route path="/fisier" component={Fisier}/>
-              <Route path="/clientcontor" component={ClientContor}/>
-              {/* Fallback route for any unmatched paths */}
-              <Route component={Acasa}/>
-            </Switch>
-          </CSSTransition>
-      </TransitionGroup>
-    )}/>
-  </div>
-  </div>
+    <Route render={({ location }) => <Dashboard location={location}>
+      <Switch location={location}>
+        <Route exact path="/" component={Acasa} />
+        <Route path="/atr" render={() => <ResourceWorkspace definition={resourceDefinitions.atr} />} />
+        <Route path="/client" render={() => <ResourceWorkspace definition={resourceDefinitions.client} />} />
+        <Route path="/email" render={() => <ResourceWorkspace definition={resourceDefinitions.email} />} />
+        <Route path="/firma" render={() => <ResourceWorkspace definition={resourceDefinitions.firma} />} />
+        <Route path="/proiect" render={() => <ResourceWorkspace definition={resourceDefinitions.proiect} />} />
+        <Route exact path="/proiectfotovoltaice" component={RegistruFotovoltaice} />
+        <Route exact path="/registrufotovoltaice" component={RegistruFotovoltaice} />
+        <Route path="/word" component={Word} />
+        <Route path="/registruatr" component={RegistruATR} />
+        <Route path="/grup" render={() => <ResourceWorkspace definition={resourceDefinitions.grup} />} />
+        <Route path="/folder" render={() => <ResourceWorkspace definition={resourceDefinitions.folder} />} />
+        <Route path="/fisier" render={() => <ResourceWorkspace definition={resourceDefinitions.fisier} />} />
+        <Route path="/clientcontor" render={() => <ResourceWorkspace definition={resourceDefinitions.contor} />} />
+        <Redirect to="/" />
+      </Switch>
+    </Dashboard>} />
   );
 }
-
-export default App;

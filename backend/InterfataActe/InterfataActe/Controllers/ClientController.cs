@@ -1,9 +1,10 @@
 ﻿using System;
-using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Cors;
 using InterfataActe.Interfaces;
 using InterfataActe.Models;
+using InterfataActe.Brockers;
+using Microsoft.EntityFrameworkCore;
 
 namespace InterfataActe.Controllers
 {
@@ -13,10 +14,12 @@ namespace InterfataActe.Controllers
     public class ClientController : ControllerBase
     {
         private readonly IClientRepository _client;
+        private readonly InterfataActeBrocker _database;
 
-        public ClientController(IClientRepository client)
+        public ClientController(IClientRepository client, InterfataActeBrocker database)
         {
             _client = client;
+            _database = database;
         }
 
         [HttpPost("create")]
@@ -91,9 +94,6 @@ namespace InterfataActe.Controllers
                 if (result == null)
                     return StatusCode(500, new { message = "A apărut o eroare la preluarea clienților." });
 
-                if (!result.Any())
-                    return NotFound(new { message = "Nu există clienți în baza de date." });
-
                 return Ok(result);
             }
             catch (Exception ex)
@@ -111,9 +111,6 @@ namespace InterfataActe.Controllers
 
                 if (result == null)
                     return StatusCode(500, new { message = "A apărut o eroare la preluarea clienților firmă." });
-
-                if (!result.Any())
-                    return NotFound(new { message = "Nu există clienți firmă în baza de date." });
 
                 return Ok(result);
             }
@@ -138,6 +135,23 @@ namespace InterfataActe.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = $"Eroare internă: {ex.Message}" });
+            }
+        }
+
+        [HttpDelete("{id:guid}")]
+        public IActionResult DeleteClient(Guid id)
+        {
+            var client = _database.Clienti.Find(id);
+            if (client == null) return NotFound(new { message = "Clientul nu a fost găsit." });
+            try
+            {
+                _database.Clienti.Remove(client);
+                _database.SaveChanges();
+                return NoContent();
+            }
+            catch (DbUpdateException)
+            {
+                return Conflict(new { message = "Clientul are proiecte sau companii asociate și nu poate fi șters." });
             }
         }
     }

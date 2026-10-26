@@ -1,0 +1,11 @@
+# Local Python artifacts
+__pycache__/
+*.py[cod]
+
+# Personal ID sample used for local OCR calibration
+/example.jpeg
+
+# Local environment files
+.env
+.env.*
+!.env.example
