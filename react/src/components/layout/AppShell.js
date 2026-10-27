@@ -27,7 +27,7 @@ export default function AppShell({ children, location = { pathname: "/" } }) {
   const page = findPage(location.pathname);
 
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
-  useEffect(() => { document.title = `${page.label} · OVINSTAL`; }, [page.label]);
+  useEffect(() => { document.title = `Ovinstal | ${page.label}`; }, [page.label]);
 
   return (
     <div className="app-shell">
