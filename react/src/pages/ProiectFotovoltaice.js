@@ -1,251 +1,157 @@
-import React,{ useMemo, useState, useEffect } from "react";
-import { createPortal } from "react-dom";
-import { baseUrl } from "../config/api";
+import React, { useEffect, useMemo, useState } from "react";
+import { FiPlus, FiTrash2 } from "react-icons/fi";
+import { apiList, apiRequest } from "../lib/api";
+import { formatNumber } from "../lib/format";
+import { Combobox, Field, FormGrid, FormSection, Notice, SelectField, TextField } from "../components/ui";
 
+const emptyInverter = () => ({ nume: "", nrInvertoare: 0, putereInstalata: 0, serie: "" });
+const emptyPanel = () => ({ nume: "", nrPanouri: 0, putereInstalata: 0, serie: "" });
+const emptyBattery = () => ({ nume: "", nrBaterii: 0, putereInstalata: 0, capacitate: 0, serie: "" });
 
-/**
- * Pagina: Adaugare Proiect Fotovoltaice
- * - Trimite JSON compatibil cu modelul ProiectFotovoltaice (camelCase)
- * - Endpoint default: /api/ProiecteFotovoltaice
- */
-export default function ProiectFotovoltaice(props) {
-  const [clienti, setClienti] = useState([]);
-  const [loadingClienti, setLoadingClienti] = useState(false);
-  const id = props.id;
+const initialForm = () => ({
+  clientID: "", nrProiect: "", nrPV: "", data: new Date().toISOString().slice(0, 16), firmaID: "",
+  judet: "", sector: "", localitatea: "", comuna: "", strada: "", nrStrada: "", bloc: "", scara: "", etaj: "", apartament: "",
+  nrCadastral: "", nrCF: "", amplasare: "",
+  coeficientPRM: "1.1", prm_Masurat: "",
+  tipSistem: "Monofazat", pod: "", backup: "", smartMeter: "",
+  dateInvertoare: [emptyInverter()], datePanouri: [emptyPanel()], dateBaterii: [],
+});
+
+const prmCoefficients = [
+  { value: "1.1", label: "1,1 — sol uscat" },
+  { value: "1.3", label: "1,3 — sol umed" },
+  { value: "1.5", label: "1,5 — sol foarte umed" },
+];
+
+// PRM calculat = PRM măsurat × coeficient, rounded to 2 decimals.
+const computePrm = (measured, coefficient) => {
+  const value = Number(measured);
+  if (measured === "" || !Number.isFinite(value)) return "";
+  return String(Math.round(value * Number(coefficient) * 100) / 100);
+};
+
+const guidRe = /^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/;
+
+const equipment = {
+  dateInvertoare: {
+    title: "Invertoare", addLabel: "Adaugă invertor", empty: emptyInverter, keepOne: true, suggestionKey: "invertoare",
+    columns: [
+      { key: "nume", label: "Model", autocomplete: true, placeholder: "ex: Huawei SUN2000-10KTL-M1" },
+      { key: "nrInvertoare", label: "Nr.", type: "number", min: "0", width: 90 },
+      { key: "putereInstalata", label: "Putere (kW)", type: "number", step: "0.01", min: "0", width: 130 },
+      { key: "serie", label: "Serie" },
+    ],
+    onSuggestion: (item) => ({ putereInstalata: String(item.putereInstalata) }),
+  },
+  datePanouri: {
+    title: "Panouri", addLabel: "Adaugă panou", empty: emptyPanel, keepOne: true, suggestionKey: "panouri",
+    columns: [
+      { key: "nume", label: "Model", autocomplete: true, placeholder: "ex: LR5-54HTH-455M LONGI" },
+      { key: "nrPanouri", label: "Nr.", type: "number", min: "0", width: 90 },
+      { key: "putereInstalata", label: "Putere panou (W)", type: "number", step: "0.001", min: "0", width: 150 },
+      { key: "serie", label: "Serii", minWidth: 280 },
+    ],
+    onSuggestion: (item) => ({ putereInstalata: String(item.putereInstalata) }),
+  },
+  dateBaterii: {
+    title: "Baterii", addLabel: "Adaugă baterie", empty: emptyBattery, keepOne: false, suggestionKey: "baterii",
+    columns: [
+      { key: "nume", label: "Model", autocomplete: true, placeholder: "ex: Huawei LUNA2000-5-S0" },
+      { key: "nrBaterii", label: "Nr.", type: "number", min: "0", width: 90 },
+      { key: "putereInstalata", label: "Putere (kW)", type: "number", step: "0.01", min: "0", width: 120 },
+      { key: "capacitate", label: "Capacitate (Ah)", type: "number", step: "0.01", min: "0", width: 140 },
+      { key: "serie", label: "Serie" },
+    ],
+    onSuggestion: (item) => ({ putereInstalata: String(item.putereInstalata), capacitate: String(item.capacitate) }),
+  },
+};
+
+const suggestionSources = ["panouri", "invertoare", "baterii", "smartmeter", "backup"];
+
+export default function ProiectFotovoltaice({ id, onSuccess, onCancel, onBusyChange }) {
   const isEdit = Boolean(id);
-  const [sugestiiPanouri, setSugestiiPanouri] = useState([]);
-  const [sugestiiInvertoare, setSugestiiInvertoare] = useState([]);
-  const [sugestiiBaterii, setSugestiiBaterii] = useState([]);
-  const [sugestiiSmartMeter, setSugestiiSmartMeter] = useState([]);
-  const [sugestiiBackup, setSugestiiBackup] = useState([]);
+  const [form, setForm] = useState(initialForm);
+  const [clients, setClients] = useState([]);
+  const [loadingClients, setLoadingClients] = useState(true);
+  const [loadingProject, setLoadingProject] = useState(isEdit);
+  const [suggestions, setSuggestions] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const setField = (name, value) => setForm((current) => ({ ...current, [name]: value }));
+
+  useEffect(() => { onBusyChange?.(submitting); }, [submitting, onBusyChange]);
 
   useEffect(() => {
-    fetch(`${baseUrl}/proiectfotovoltaice/sugestii/panouri`)
-      .then(r => r.json())
-      .then(setSugestiiPanouri);
-
-    fetch(`${baseUrl}/proiectfotovoltaice/sugestii/invertoare`)
-      .then(r => r.json())
-      .then(setSugestiiInvertoare);
-
-    fetch(`${baseUrl}/proiectfotovoltaice/sugestii/baterii`)
-      .then(r => r.json())
-      .then(setSugestiiBaterii);
-    fetch(`${baseUrl}/proiectfotovoltaice/sugestii/smartmeter`)
-      .then(r => r.json())
-      .then(setSugestiiSmartMeter);
-    fetch(`${baseUrl}/proiectfotovoltaice/sugestii/backup`)
-      .then(r => r.json())
-      .then(setSugestiiBackup);
+    let active = true;
+    Promise.all(suggestionSources.map((key) => apiList(`/proiectfotovoltaice/sugestii/${key}`).then((rows) => [key, rows], () => [key, []])))
+      .then((entries) => { if (active) setSuggestions(Object.fromEntries(entries)); });
+    apiList("/client/clientifirme")
+      .then((rows) => { if (active) setClients(rows); })
+      .catch(() => { if (active) setResult({ ok: false, message: "Lista de clienți nu a putut fi încărcată." }); })
+      .finally(() => { if (active) setLoadingClients(false); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
     if (isEdit) return;
-
-    const loadNext = async () => {
-      const res = await fetch(`${baseUrl}/proiectfotovoltaice/next-numbers`);
-      const data = await res.json();
-
-      setField("nrProiect", String(data.nrProiect));
-      setField("nrPV", String(data.nrPV));
-    };
-
-    loadNext();
+    apiRequest("/proiectfotovoltaice/next-numbers")
+      .then((data) => setForm((current) => ({ ...current, nrProiect: String(data.nrProiect), nrPV: String(data.nrPV) })))
+      .catch(() => {});
   }, [isEdit]);
 
-  const [form, setForm] = useState({
-    clientID: "",
-    nrProiect: "",
-    nrPV:"",
-    data: new Date().toISOString().slice(0, 16),
-    firmaID: "",
-    judet: "",
-    sector: "",
-    localitatea: "",
-    comuna: "",
-    strada: "",
-    nrStrada: "",
-    bloc: "",
-    scara: "",
-    etaj: "",
-    apartament: "",
-    nrCadastral: "",
-    nrCF: "",
-    amplasare: "",
+  useEffect(() => {
+    if (!isEdit) return;
+    setLoadingProject(true);
+    apiRequest(`/proiectfotovoltaice/${id}`, { fallbackError: "Proiectul nu a putut fi încărcat." })
+      .then((project) => setForm({
+        id: project.id,
+        clientID: project.clientID ?? "",
+        nrProiect: project.nrProiect ?? "",
+        nrPV: project.nrPV ?? "",
+        data: project.data ? project.data.slice(0, 16) : "",
+        firmaID: project.firmaID ?? "",
+        judet: project.judet ?? "", sector: project.sector ?? "", localitatea: project.localitatea ?? "", comuna: project.comuna ?? "",
+        strada: project.strada ?? "", nrStrada: project.nrStrada ?? "", bloc: project.bloc ?? "", scara: project.scara ?? "",
+        etaj: project.etaj ?? "", apartament: project.apartament ?? "",
+        nrCadastral: project.nrCadastral ?? "", nrCF: project.nrCF ?? "", amplasare: project.amplasare ?? "",
+        backup: project.backup ?? "", smartMeter: project.smartMeter ?? "",
+        coeficientPRM: String(project.prM_Coeficient ?? "1.1"),
+        prm_Masurat: project.prM_Masurat?.toString() ?? "",
+        tipSistem: project.tipSistem ?? "Monofazat",
+        pod: project.pod ?? "",
+        dateInvertoare: project.dateInvertoare?.map((item) => ({ nume: item.model, nrInvertoare: item.nrInvertoare, putereInstalata: item.putereInstalata, serie: item.serie ?? "" })) ?? [],
+        datePanouri: project.datePanouri?.map((item) => ({ nume: item.model, nrPanouri: item.nrPanouri, putereInstalata: item.putereInstalata, serie: item.serie ?? "" })) ?? [],
+        dateBaterii: project.dateBaterii?.map((item) => ({ nume: item.model, nrBaterii: item.nrBaterii, putereInstalata: item.putereInstalata, capacitate: item.capacitate, serie: item.serie ?? "" })) ?? [],
+      }))
+      .catch((error) => setResult({ ok: false, message: error.message }))
+      .finally(() => setLoadingProject(false));
+  }, [id, isEdit]);
 
-    // PRM
-    coeficientPRM: "1.1", // ✅ select (1.1, 1.3, 1.5)
-    prm_Masurat: "",
-    prm_Calculat: "", // ✅ auto = prm_Masurat * coeficient
+  const selectedClient = useMemo(() => clients.find((client) => client.id === form.clientID) || null, [clients, form.clientID]);
+  const companies = selectedClient?.firme ?? [];
+  const prmCalculated = computePrm(form.prm_Masurat, form.coeficientPRM);
 
-    tipSistem: "Monofazat",
-    pod: "",
-    backup:"",
-    smartMeter:"",
-    dateInvertoare: [{ nume: "", nrInvertoare: 0, putereInstalata: 0, serie: "" }],
-    datePanouri: [{ nume: "", nrPanouri: 0, putereInstalata: 0, serie: "" }],
-    dateBaterii: [],
+  const panelKwp = form.datePanouri.reduce((sum, item) => sum + Number(item.nrPanouri || 0) * Number(item.putereInstalata || 0), 0) / 1000;
+  const inverterKw = form.dateInvertoare.reduce((sum, item) => sum + Number(item.nrInvertoare || 0) * Number(item.putereInstalata || 0), 0);
+
+  const updateItem = (listName, index, changes) => setForm((current) => ({
+    ...current,
+    [listName]: current[listName].map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item),
+  }));
+  const addItem = (listName) => setForm((current) => ({ ...current, [listName]: [...current[listName], equipment[listName].empty()] }));
+  const removeItem = (listName, index) => setForm((current) => {
+    const remaining = current[listName].filter((_, itemIndex) => itemIndex !== index);
+    return { ...current, [listName]: remaining.length === 0 && equipment[listName].keepOne ? [equipment[listName].empty()] : remaining };
   });
-
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState({ ok: false, message: "" });
-
-  const setField = (name, value) => setForm((p) => ({ ...p, [name]: value }));
-
-  useEffect(() => {
-  if (!isEdit) return;
-
-  const loadProiect = async () => {
-    try {
-      const res = await fetch(`${baseUrl}/proiectfotovoltaice/${id}`);
-      if (!res.ok) throw new Error(await res.text());
-      const p = await res.json();
-      console.log(p);
-      // 🔁 map API → form
-      setForm({
-        id: p.id,
-        clientID: p.clientID ?? "",
-        nrProiect: p.nrProiect ?? "",
-        nrPV: p.nrPV ?? "",
-        data: p.data ? p.data.slice(0, 16) : "",
-        firmaID: p.firmaID ?? "",
-        judet: p.judet ?? "",
-        sector: p.sector ?? "",
-        localitatea: p.localitatea ?? "",
-        comuna: p.comuna ?? "",
-        strada: p.strada ?? "",
-        nrStrada: p.nrStrada ?? "",
-        bloc: p.bloc ?? "",
-        scara: p.scara ?? "",
-        etaj: p.etaj ?? "",
-        apartament: p.apartament ?? "",
-        nrCadastral: p.nrCadastral ?? "",
-        nrCF: p.nrCF ?? "",
-        amplasare: p.amplasare ?? "",
-        backup: p.backup ?? "",
-        smartMeter: p.smartMeter ?? "",
-        coeficientPRM: String(p.prm_Coeficient ?? "1.1"),
-        prm_Masurat: p.prM_Masurat?.toString() ?? "",
-        prm_Calculat: p.prM_Calculat?.toString() ?? "",
-
-        tipSistem: p.tipSistem ?? "Monofazat",
-        pod: p.pod ?? "",
-
-        dateInvertoare: p.dateInvertoare?.map(i => ({
-          nume: i.model,
-          nrInvertoare: i.nrInvertoare,
-          putereInstalata: i.putereInstalata,
-          serie: i.serie ?? ""
-        })) ?? [],
-
-        datePanouri: p.datePanouri?.map(x => ({
-          nume: x.model,
-          nrPanouri: x.nrPanouri,
-          putereInstalata: x.putereInstalata,
-          serie: x.serie ?? ""
-        })) ?? [],
-
-        dateBaterii: p.dateBaterii?.map(b => ({
-          nume: b.model,
-          nrBaterii: b.nrBaterii,
-          putereInstalata: b.putereInstalata,
-          capacitate: b.capacitate,
-          serie: b.serie ?? ""
-        })) ?? [],
-      });
-    } catch (e) {
-      alert("Eroare la încărcare proiect");
-    }
-  };
-
-  loadProiect();
-}, [id, isEdit]);
-
-
-  useEffect(() => {
-    const loadClienti = async () => {
-      setLoadingClienti(true);
-      try {
-        const res = await fetch(`${baseUrl}/client/clientifirme`);
-        const data = await res.json().catch(() => []);
-        setClienti(res.ok && Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error("Eroare la încărcare clienți", e);
-      } finally {
-        setLoadingClienti(false);
-      }
-    };
-
-    loadClienti();
-  }, []);
-
-  const clientSelectat = useMemo(() => {
-    return clienti.find((c) => c.id === form.clientID) || null;
-  }, [clienti, form.clientID]);
-
-  const firmeDisponibile = useMemo(() => {
-    return clientSelectat?.firme ?? [];
-  }, [clientSelectat]);
-
-  // când schimbi clientul, resetezi firma
-  useEffect(() => {
-    if (!isEdit) {
-      setField("firmaID", "");
-    }
-  }, [form.clientID, isEdit]);
-
-  // ✅ PRM_Calculat = PRM_Masurat * coeficient
-  useEffect(() => {
-    const masurat = Number(form.prm_Masurat);
-    const coef = Number(form.coeficientPRM);
-
-    if (form.prm_Masurat === "" || !Number.isFinite(masurat)) {
-      setField("prm_Calculat", "");
-      return;
-    }
-
-    const calculat = masurat * coef;
-    const rounded = Math.round(calculat * 100) / 100; // 2 zecimale
-    setField("prm_Calculat", String(rounded));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.prm_Masurat, form.coeficientPRM]);
-
-  const updateListItem = (listName, index, key, value) => {
-    setForm((p) => {
-      const next = structuredClone(p);
-      next[listName][index][key] = value;
-      return next;
-    });
-  };
-
-  const addListItem = (listName, item) => {
-    setForm((p) => ({ ...p, [listName]: [...p[listName], item] }));
-  };
-
-  const removeListItem = (listName, index) => {
-    
-    setForm((p) => {
-      const next = structuredClone(p);
-      next[listName].splice(index, 1);
-
-      if (next[listName].length === 0) {
-        if (listName === "dateInvertoare") next[listName].push({ nume: "", nrInvertoare: 0, putereInstalata: 0, serie: "" });
-        if (listName === "datePanouri") next[listName].push({ nume: "", nrPanouri: 0, putereInstalata: 0, serie: "" });
-      
-      }
-      return next;
-    });
-  };
 
   const validate = () => {
     const errors = [];
-    if (!form.clientID) errors.push("Nu ai selectat client");
-    if (!form.nrProiect) errors.push("Numar proiect este obligatoriu.");
-    if (!form.nrPV) errors.push("Numar PV este obligatoriu.");
-    const guidRe = /^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$/;
-    if (form.clientID && !guidRe.test(form.clientID)) errors.push("clientID nu pare un GUID valid.");
-    if (form.firmaID && !guidRe.test(form.firmaID)) errors.push("firmaID nu pare un GUID valid.");
-
+    if (!form.clientID) errors.push("Alege clientul.");
+    if (!form.nrProiect) errors.push("Numărul proiectului este obligatoriu.");
+    if (!form.nrPV) errors.push("Numărul PV este obligatoriu.");
+    if (form.clientID && !guidRe.test(form.clientID)) errors.push("Clientul selectat nu are un identificator valid.");
+    if (form.firmaID && !guidRe.test(form.firmaID)) errors.push("Firma selectată nu are un identificator valid.");
     return errors;
   };
 
@@ -257,710 +163,172 @@ export default function ProiectFotovoltaice(props) {
       nrPV: Number(form.nrPV),
       data: form.data ? new Date(form.data).toISOString() : null,
       firmaID: form.firmaID ? form.firmaID.trim() : null,
-
-      judet: form.judet,
-      sector: form.sector,
-      localitatea: form.localitatea,
-      comuna: form.comuna,
-      strada: form.strada,
-      nrStrada: form.nrStrada,
-      bloc: form.bloc,
-      scara: form.scara,
-      etaj: form.etaj,
-      apartament: form.apartament,
-      nrCadastral: form.nrCadastral,
-      nrCF: form.nrCF,
-      amplasare: form.amplasare,
-
+      judet: form.judet, sector: form.sector, localitatea: form.localitatea, comuna: form.comuna, strada: form.strada,
+      nrStrada: form.nrStrada, bloc: form.bloc, scara: form.scara, etaj: form.etaj, apartament: form.apartament,
+      nrCadastral: form.nrCadastral, nrCF: form.nrCF, amplasare: form.amplasare,
       prm_Masurat: form.prm_Masurat === "" ? 0 : Number(form.prm_Masurat),
-      prm_Calculat: form.prm_Calculat === "" ? 0 : Number(form.prm_Calculat),
-      prm_Coeficient: Number(form.coeficientPRM), // ✅ dacă vrei să-l trimiți și pe acesta
+      prm_Calculat: prmCalculated === "" ? 0 : Number(prmCalculated),
+      prm_Coeficient: Number(form.coeficientPRM),
       tipSistem: form.tipSistem,
       pod: form.pod,
       backup: form.backup,
       smartMeter: form.smartMeter,
-      dateInvertoare: (form.dateInvertoare || []).map((i) => ({
-        model: i.nume,
-        nrInvertoare: Number(i.nrInvertoare || 0),
-        putereInstalata: Number(i.putereInstalata || 0),
-        serie: i.serie,
-      })),
-
-      datePanouri: (form.datePanouri || []).map((p) => ({
-        model: p.nume,
-        nrPanouri: Number(p.nrPanouri || 0),
-        putereInstalata: Number(p.putereInstalata || 0),
-        serie: p.serie,
-      })),
-
-      dateBaterii: (form.dateBaterii || []).map((b) => ({
-        model: b.nume,
-        nrBaterii: Number(b.nrBaterii || 0),
-        putereInstalata: Number(b.putereInstalata || 0),
-        capacitate: Number(b.capacitate || 0), // ✅ FIX (era greșit)
-        serie: b.serie,
-      })),
+      dateInvertoare: form.dateInvertoare.map((item) => ({ model: item.nume, nrInvertoare: Number(item.nrInvertoare || 0), putereInstalata: Number(item.putereInstalata || 0), serie: item.serie })),
+      datePanouri: form.datePanouri.map((item) => ({ model: item.nume, nrPanouri: Number(item.nrPanouri || 0), putereInstalata: Number(item.putereInstalata || 0), serie: item.serie })),
+      dateBaterii: form.dateBaterii.map((item) => ({ model: item.nume, nrBaterii: Number(item.nrBaterii || 0), putereInstalata: Number(item.putereInstalata || 0), capacitate: Number(item.capacitate || 0), serie: item.serie })),
     };
-console.log(payload)
     if (!payload.data) delete payload.data;
     return payload;
   };
 
-    
-
-  const onSubmit = async (e) => {
-    
-  e.preventDefault();
-  setResult({ ok: false, message: "" });
-
-  const errors = validate();
-  if (errors.length) {
-    setResult({ ok: false, message: errors.join(" ") });
-    return;
-  }
-
-  const payload = buildPayload();
-  setSubmitting(true);
-
-  try {
-    const resp = await fetch(
-      isEdit
-        ? `${baseUrl}/proiectfotovoltaice/${id}`
-        : `${baseUrl}/proiectfotovoltaice`,
-      {
+  const onSubmit = async (event) => {
+    event.preventDefault();
+    setResult(null);
+    const errors = validate();
+    if (errors.length) { setResult({ ok: false, message: errors.join("\n") }); return; }
+    setSubmitting(true);
+    try {
+      const saved = await apiRequest(isEdit ? `/proiectfotovoltaice/${id}` : "/proiectfotovoltaice", {
         method: isEdit ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
-    
-    if (!resp.ok) throw new Error(await resp.text());
-
-    setResult({
-      ok: true,
-      message: isEdit
-        ? "Proiect actualizat cu succes!"
-        : "Proiect creat cu succes!",
-    });
-    const updated = await resp.json();
-    if (props.onSuccess) {
-      props.onSuccess(updated);
+        body: buildPayload(),
+        fallbackError: "Proiectul nu a putut fi salvat.",
+      });
+      onSuccess?.(saved);
+    } catch (error) {
+      setResult({ ok: false, message: error.message });
+    } finally {
+      setSubmitting(false);
     }
- 
-  } catch (err) {
-    setResult({ ok: false, message: err.message });
-  } finally {
-    setSubmitting(false);
-  }
-};
-
-  return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
-      <h2>
-        {isEdit ? "Editare Proiect Fotovoltaic" : "Adăugare Proiect Fotovoltaic"}
-      </h2>
-
-      {result.message && (
-        <div
-          style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 1000,
-            padding: 12,
-            borderRadius: 8,
-            marginBottom: 12,
-            background: result.ok ? "#e9f7ef" : "#fdecea",
-            border: `1px solid ${result.ok ? "#2ecc71" : "#e74c3c"}`,
-            color: "#111",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {result.message}
-        </div>
-      )}
-
-      <form onSubmit={onSubmit}>
-        <Section title="Date generale">
-          <Grid>
-            {/* CLIENT */}
-            <label style={styles.label}>
-              <span style={styles.labelText}>Client *</span>
-              <select
-                value={form.clientID}
-                onChange={(e) => setField("clientID", e.target.value)}
-                style={styles.input}
-                disabled={loadingClienti}
-              >
-                <option value="">{loadingClienti ? "Se încarcă..." : "-- selectează client --"}</option>
-
-                {clienti.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nume} {c.cnp ? `(${c.cnp})` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <Input label="Nr Proiect*" value={form.nrProiect} onChange={(v) => setField("nrProiect", v)} type="number" />
-            <Input label="Nr PV*" value={form.nrPV} onChange={(v) => setField("nrPV", v)} type="number" />
-            <Input label="Data" value={form.data} onChange={(v) => setField("data", v)} type="datetime-local" />
-
-            {/* FIRMA */}
-            <label style={styles.label}>
-              <span style={styles.labelText}>Firmă</span>
-              <select
-                value={form.firmaID}
-                onChange={(e) => setField("firmaID", e.target.value)}
-                style={styles.input}
-                disabled={!form.clientID || firmeDisponibile.length === 0}
-              >
-                <option value="">
-                  {!form.clientID
-                    ? "-- alege întâi clientul --"
-                    : firmeDisponibile.length === 0
-                    ? "-- clientul nu are firme --"
-                    : "-- selectează firmă --"}
-                </option>
-
-                {firmeDisponibile.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.denumire ?? f.nume ?? f.id}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <Select
-              label="Tip sistem"
-              value={form.tipSistem}
-              onChange={(v) => setField("tipSistem", v)}
-              options={["Monofazat", "Trifazat"]}
-            />
-            <Input label="POD" value={form.pod} onChange={(v) => setField("pod", v)} placeholder="ex: 59404020000..." />
-            <Input label="Amplasare" value={form.amplasare} onChange={(v) => setField("amplasare", v)} placeholder="ex: sol, casa" />
-          </Grid>
-        </Section>
-
-        <Section title="Adresă">
-          <Grid>
-            <Input label="Județ" value={form.judet} onChange={(v) => setField("judet", v)} />
-            <Input label="Sector" value={form.sector} onChange={(v) => setField("sector", v)} />
-            <Input label="Localitatea" value={form.localitatea} onChange={(v) => setField("localitatea", v)} />
-            <Input label="Comuna" value={form.comuna} onChange={(v) => setField("comuna", v)} />
-            <Input label="Strada" value={form.strada} onChange={(v) => setField("strada", v)} />
-            <Input label="Nr Stradă" value={form.nrStrada} onChange={(v) => setField("nrStrada", v)} />
-            <Input label="Bloc" value={form.bloc} onChange={(v) => setField("bloc", v)} />
-            <Input label="Scara" value={form.scara} onChange={(v) => setField("scara", v)} />
-            <Input label="Etaj" value={form.etaj} onChange={(v) => setField("etaj", v)} />
-            <Input label="Apartament" value={form.apartament} onChange={(v) => setField("apartament", v)} />
-            <Input label="Nr Cadastral" value={form.nrCadastral} onChange={(v) => setField("nrCadastral", v)} />
-            <Input label="Nr CF" value={form.nrCF} onChange={(v) => setField("nrCF", v)} />
-          </Grid>
-        </Section>
-
-        {/* ✅ PRM: masurat input, coeficient select, calculat auto */}
-        <Section title="PRM">
-          <Grid>
-            <Input
-              label="PRM Măsurat"
-              value={form.prm_Masurat}
-              onChange={(v) => setField("prm_Masurat", v)}
-              type="number"
-              step="0.01"
-            />
-
-          <Select
-            label="Coeficient PRM"
-            value={form.coeficientPRM}
-            onChange={(v) => setField("coeficientPRM", v)}
-            options={[
-              { value: "1.1", label: "1.1 — uscat" },
-              { value: "1.3", label: "1.3 — umed" },
-              { value: "1.5", label: "1.5 — foarte umed" },
-            ]}
-          />
-
-            <label style={styles.label}>
-              <span style={styles.labelText}>PRM Calculat (auto)</span>
-              <input value={form.prm_Calculat} readOnly style={{ ...styles.input, background: "#f5f5f5" }} />
-            </label>
-          </Grid>
-        </Section>
-
-        <Section title="Invertoare">
-          <ListTable
-            headers={["Nume", "Nr invertoare", "Putere invertor", "Serie"]}
-            rows={form.dateInvertoare}
-            renderRow={(row, idx) => (
-              <>
-                <td>
-                  <AutoCompleteInput
-                    value={row.nume}
-                    suggestions={sugestiiInvertoare}
-                    placeholder="ex: Huawei SUN2000-10KTL-M1"
-                    onChange={(v) =>
-                      updateListItem("dateInvertoare", idx, "nume", v)
-                    }
-                    onSelectSuggestion={(s)=>{
-                      updateListItem("dateInvertoare",idx,"putereInstalata",String(s.putereInstalata))
-                    }}
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.nrInvertoare}
-                    onChange={(e) => updateListItem("dateInvertoare", idx, "nrInvertoare", e.target.value)}
-                    type="number"
-                    min="0"
-                    style={styles.input}
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.putereInstalata}
-                    onChange={(e) => updateListItem("dateInvertoare", idx, "putereInstalata", e.target.value)}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    style={styles.input}
-                  />
-                </td>
-                <td>
-                  <input value={row.serie} onChange={(e) => updateListItem("dateInvertoare", idx, "serie", e.target.value)} style={styles.input} />
-                </td>
-                <td style={{ textAlign: "right" }}>
-                  <button type="button" onClick={() => removeListItem("dateInvertoare", idx)} style={styles.btnDanger}>
-                    Șterge
-                  </button>
-                </td>
-              </>
-            )}
-          />
-          <div style={{ marginTop: 8 }}>
-            <button
-              type="button"
-              onClick={() => addListItem("dateInvertoare", { nume: "", nrInvertoare: 0, putereInstalata: 0, serie: "" })}
-              style={styles.btn}
-            >
-              + Adaugă model invertor
-            </button>
-          </div>
-        </Section>
-
-        <Section title="Panouri">
-          <ListTable
-            headers={["Nume", "Numar panouri", "Putere panou (W)", "Serii"]}
-            rows={form.datePanouri}
-            renderRow={(row, idx) => (
-              <>
-                <td>
-                     <AutoCompleteInput
-                    value={row.nume}
-                    suggestions={sugestiiPanouri}
-                    placeholder="ex: LR5-54HTH-455M LONGI"
-                    onChange={(v) =>
-                      updateListItem("datePanouri", idx, "nume", v)
-                    }
-                    onSelectSuggestion={(s)=>{
-                      updateListItem("datePanouri",idx,"putereInstalata",String(s.putereInstalata))
-                    }}
-                  />
-
-                </td>
-                <td>
-                  <input
-                    value={row.nrPanouri}
-                    onChange={(e) => updateListItem("datePanouri", idx, "nrPanouri", e.target.value)}
-                    type="number"
-                    min="0"
-                    style={styles.input}
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.putereInstalata}
-                    onChange={(e) => updateListItem("datePanouri", idx, "putereInstalata", e.target.value)}
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    style={styles.input}
-                    placeholder="ex: 0.55"
-                  />
-                </td>
-                <td style={{ minWidth: 400 }}>
-                  <input value={row.serie} onChange={(e) => updateListItem("datePanouri", idx, "serie", e.target.value)} style={styles.input} />
-                </td>
-                <td style={{ textAlign: "right" }}>
-                  <button type="button" onClick={() => removeListItem("datePanouri", idx)} style={styles.btnDanger}>
-                    Șterge
-                  </button>
-                </td>
-              </>
-            )}
-          />
-          <div style={{ marginTop: 8 }}>
-            <button
-              type="button"
-              onClick={() => addListItem("datePanouri", { nume: "", nrPanouri: 0, putereInstalata: 0, serie: "" })}
-              style={styles.btn}
-            >
-              + Adaugă model panou
-            </button>
-          </div>
-        </Section>
-
-        <Section title="Baterii">
-          <ListTable
-            headers={["Nume", "Nr baterii", "Putere baterie (kW)", "Capacitate baterie (Ah)", "Serie"]}
-            rows={form.dateBaterii}
-            renderRow={(row, idx) => (
-              <>
-                <td>
-                    <AutoCompleteInput
-                    value={row.nume}
-                    suggestions={sugestiiBaterii}
-                    placeholder="ex: Huawei LUNA2000-5-S0"
-                    onChange={(v) =>
-                      updateListItem("dateBaterii", idx, "nume", v)
-                    }
-                    onSelectSuggestion={(s)=>{
-                      updateListItem("dateBaterii",idx,"putereInstalata",String(s.putereInstalata))
-                      updateListItem("dateBaterii",idx,"capacitate",String(s.capacitate))
-                    }}
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.nrBaterii}
-                    onChange={(e) => updateListItem("dateBaterii", idx, "nrBaterii", e.target.value)}
-                    type="number"
-                    min="0"
-                    style={styles.input}
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.putereInstalata}
-                    onChange={(e) => updateListItem("dateBaterii", idx, "putereInstalata", e.target.value)}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    style={styles.input}
-                    placeholder="ex: 5.12"
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.capacitate}
-                    onChange={(e) => updateListItem("dateBaterii", idx, "capacitate", e.target.value)}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    style={styles.input}
-                    placeholder="ex: 100"
-                  />
-                </td>
-                <td>
-                  <input value={row.serie} onChange={(e) => updateListItem("dateBaterii", idx, "serie", e.target.value)} style={styles.input} />
-                </td>
-                <td style={{ textAlign: "right" }}>
-                  <button type="button" onClick={() => removeListItem("dateBaterii", idx)} style={styles.btnDanger}>
-                    Șterge
-                  </button>
-                </td>
-              </>
-            )}
-          />
-          <div style={{ marginTop: 8 }}>
-            <button
-              type="button"
-              onClick={() => addListItem("dateBaterii", { nume: "", nrBaterii: 0, putereInstalata: 0, capacitate: 0, serie: "" })}
-              style={styles.btn}
-            >
-              + Adaugă model baterie
-            </button>
-          </div>
-        </Section>
-
-        <Section title="Accesorii">
-          <Grid>
-               <div>
-              <label style={styles.label}>Sistem Backup</label>
-              <AutoCompleteInput
-                value={form.backup}
-                suggestions={sugestiiBackup}
-                placeholder="ex: Huawei SmartGuard-63A-T0"
-                onChange={(v) => setField("backup", v)}
-                onSelectSuggestion={(s) =>
-                  setField("backup", typeof s === "string" ? s : s.model)
-                }
-              />
-            </div>
-            <div>
-              <label style={styles.label}>Smart Meter</label>
-              <AutoCompleteInput
-                value={form.smartMeter}
-                suggestions={sugestiiSmartMeter}
-                placeholder="ex: Huawei Smart Meter DTSU666-H"
-                onChange={(v) => setField("smartMeter", v)}
-                onSelectSuggestion={(s) =>
-                  setField("smartMeter", typeof s === "string" ? s : s.model)
-                }
-              />
-            </div>
-          </Grid>
-
-        </Section>
-
-        <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-          <button type="submit" disabled={submitting} style={styles.btnPrimary}>
-            {submitting
-              ? "Se salvează..."
-              : isEdit
-              ? "Salvează modificările"
-              : "Salvează proiect"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setForm((p) => ({
-                ...p,
-                dateInvertoare: [{ nume: "", nrInvertoare: 0, putereInstalata: 0, serie: "" }],
-                datePanouri: [{ nume: "", nrPanouri: 0, putereInstalata: 0, serie: "" }],
-                dateBaterii: [],
-              }));
-              setResult({ ok: false, message: "" });
-            }}
-            style={styles.btn}
-          >
-            Reset liste
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function Section({ title, children }) {
-  return (
-    <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12, marginBottom: 12 }}>
-      <h3 style={{ margin: "4px 0 12px" }}>{title}</h3>
-      {children}
-    </div>
-  );
-}
-
-function Grid({ children }) {
-  return <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(240px, 1fr))", gap: 12 }}>{children}</div>;
-}
-
-function Input({ label, value, onChange, type = "text", step, placeholder }) {
-  return (
-    <label style={styles.label}>
-      <span style={styles.labelText}>{label}</span>
-      <input value={value} type={type} step={step} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} style={styles.input} />
-    </label>
-  );
-}
-
-function Select({ label, value, onChange, options }) {
-  return (
-    <label style={styles.label}>
-      <span style={styles.labelText}>{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={styles.input}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label ?? o}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function ListTable({ headers, rows, renderRow }) {
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            {headers.map((h) => (
-              <th key={h} style={styles.th}>
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, idx) => (
-            <tr key={idx} style={{ borderTop: "1px solid #eee" }}>
-              {renderRow(row, idx)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-const styles = {
-  label: { display: "flex", flexDirection: "column", gap: 6 },
-  labelText: { fontSize: 12, color: "#444" },
-  input: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #ccc",
-    outline: "none",
-    width: "100%",
-    boxSizing: "border-box",
-  },
-  th: { textAlign: "left", padding: 10, fontSize: 12, color: "#666", borderBottom: "1px solid #eee" },
-  btn: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #bbb",
-    background: "#fff",
-    cursor: "pointer",
-  },
-  btnPrimary: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #111",
-    background: "#111",
-    color: "#fff",
-    cursor: "pointer",
-  },
-  btnDanger: {
-    padding: "8px 10px",
-    borderRadius: 10,
-    border: "1px solid #e74c3c",
-    background: "#fdecea",
-    color: "#111",
-    cursor: "pointer",
-  }
-
-};
-
-function AutoCompleteInput({
-  value,
-  onChange,
-  suggestions = [],
-  onSelectSuggestion,
-  labelKey = "model",
-  placeholder,
-}) {
-  const inputRef = React.useRef(null);
-  const [open, setOpen] = React.useState(false);
-  const [rect, setRect] = React.useState(null);
-
-  const getLabel = (item) => {
-    if (typeof item === "string") return item;
-    return item?.[labelKey] ?? "";
   };
 
-  const filtered = React.useMemo(() => {
-    if (!value) return [];
-    return suggestions
-      .filter((s) => getLabel(s).toLowerCase().includes(value.toLowerCase()))
-      .slice(0, 8);
-  }, [value, suggestions, labelKey]);
-
-  const updatePosition = React.useCallback(() => {
-    if (!inputRef.current) return;
-    const r = inputRef.current.getBoundingClientRect();
-    setRect({
-      top: r.bottom + 4,
-      left: r.left,
-      width: r.width,
-    });
-  }, []);
-
-  const openList = () => {
-    updatePosition();
-    setOpen(true);
+  const renderEquipment = (listName) => {
+    const config = equipment[listName];
+    const rows = form[listName];
+    return (
+      <>
+        {rows.length ? (
+          <div className="table-scroll">
+            <table className="line-table">
+              <thead><tr>{config.columns.map((column) => <th key={column.key} style={{ width: column.width, minWidth: column.minWidth }}>{column.label}</th>)}<th><span className="sr-only">Acțiuni</span></th></tr></thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={index}>
+                    {config.columns.map((column) => (
+                      <td key={column.key}>
+                        {column.autocomplete ? (
+                          <Combobox
+                            value={row[column.key]}
+                            onChange={(value) => updateItem(listName, index, { [column.key]: value })}
+                            onSelect={(item) => updateItem(listName, index, config.onSuggestion(item))}
+                            suggestions={suggestions[config.suggestionKey] || []}
+                            placeholder={column.placeholder}
+                            inputProps={{ "aria-label": `${config.title}: ${column.label}` }}
+                          />
+                        ) : (
+                          <input className="input" type={column.type || "text"} step={column.step} min={column.min} value={row[column.key] ?? ""} onChange={(event) => updateItem(listName, index, { [column.key]: event.target.value })} aria-label={`${config.title}: ${column.label}`} />
+                        )}
+                      </td>
+                    ))}
+                    <td><button type="button" className="icon-action is-danger" onClick={() => removeItem(listName, index)} title="Elimină rândul" aria-label={`Elimină rândul ${index + 1}`}><FiTrash2 /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <div className="line-empty">Nu ai adăugat {config.title.toLowerCase()}.</div>}
+        <button type="button" className="btn btn-ghost btn-sm line-add" onClick={() => addItem(listName)}><FiPlus /> {config.addLabel}</button>
+      </>
+    );
   };
 
-  React.useEffect(() => {
-    if (!open) return;
-
-    const handleUpdate = () => updatePosition();
-
-    window.addEventListener("scroll", handleUpdate, true);
-    window.addEventListener("resize", handleUpdate);
-
-    return () => {
-      window.removeEventListener("scroll", handleUpdate, true);
-      window.removeEventListener("resize", handleUpdate);
-    };
-  }, [open, updatePosition]);
-
   return (
-    <>
-      <input
-        ref={inputRef}
-        value={value}
-        placeholder={placeholder}
-        onFocus={openList}
-        onChange={(e) => {
-          onChange(e.target.value);
-          openList();
-        }}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        style={styles.input}
-      />
+    <form onSubmit={onSubmit}>
+      <div className="dialog-body">
+        {result && <div className="form-error"><Notice type={result.ok ? "success" : "error"} onClose={() => setResult(null)}>{result.message}</Notice></div>}
+        {loadingProject ? (
+          <div className="form-loading"><span className="skeleton" style={{ width: "40%" }} /><span className="skeleton" style={{ width: "80%" }} /><span className="skeleton" style={{ width: "65%" }} /></div>
+        ) : (
+          <div className="form-sections">
+            <FormSection title="Date generale" description="Beneficiarul, numerotarea și tipul sistemului.">
+              <FormGrid cols={4}>
+                <Field label="Client" required>
+                  <select className="select" value={form.clientID} disabled={loadingClients} onChange={(event) => setForm((current) => ({ ...current, clientID: event.target.value, firmaID: "" }))}>
+                    <option value="">{loadingClients ? "Se încarcă…" : "Alege clientul"}</option>
+                    {clients.map((client) => <option key={client.id} value={client.id}>{client.nume}{client.cnp ? ` (${client.cnp})` : ""}</option>)}
+                  </select>
+                </Field>
+                <Field label="Firmă" hint={form.clientID && companies.length === 0 ? "Clientul nu are firme asociate." : undefined}>
+                  <select className="select" value={form.firmaID} disabled={!form.clientID || companies.length === 0} onChange={(event) => setField("firmaID", event.target.value)}>
+                    <option value="">{!form.clientID ? "Alege întâi clientul" : companies.length === 0 ? "Fără firmă" : "Persoană fizică (fără firmă)"}</option>
+                    {companies.map((company) => <option key={company.id} value={company.id}>{company.denumire ?? company.nume ?? company.id}</option>)}
+                  </select>
+                </Field>
+                <TextField label="Nr. proiect" required type="number" value={form.nrProiect} onChange={(value) => setField("nrProiect", value)} />
+                <TextField label="Nr. PV" required type="number" value={form.nrPV} onChange={(value) => setField("nrPV", value)} />
+                <TextField label="Data" type="datetime-local" value={form.data} onChange={(value) => setField("data", value)} />
+                <SelectField label="Tip sistem" value={form.tipSistem} onChange={(value) => setField("tipSistem", value)} options={[...new Set(["Monofazat", "Trifazat", form.tipSistem].filter(Boolean))]} />
+                <TextField label="POD" value={form.pod} onChange={(value) => setField("pod", value)} placeholder="ex: 59404020000…" />
+                <TextField label="Amplasare" value={form.amplasare} onChange={(value) => setField("amplasare", value)} placeholder="ex: sol, acoperiș casă" />
+              </FormGrid>
+            </FormSection>
 
-      {open &&
-        rect &&
-        filtered.length > 0 &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: rect.top,
-              left: rect.left,
-              width: rect.width,
-              zIndex: 99999,
-              background: "#fff",
-              borderRadius: 10,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-              maxHeight: 220,
-              overflowY: "auto",
-            }}
-          >
-            {filtered.map((s, index) => {
-              const label = getLabel(s);
+            <FormSection title="Adresa locului de producere">
+              <FormGrid cols={4}>
+                <TextField label="Județ" value={form.judet} onChange={(value) => setField("judet", value)} />
+                <TextField label="Localitate" value={form.localitatea} onChange={(value) => setField("localitatea", value)} />
+                <TextField label="Comună" value={form.comuna} onChange={(value) => setField("comuna", value)} />
+                <TextField label="Sector" value={form.sector} onChange={(value) => setField("sector", value)} />
+                <TextField label="Stradă" value={form.strada} onChange={(value) => setField("strada", value)} />
+                <TextField label="Număr" value={form.nrStrada} onChange={(value) => setField("nrStrada", value)} />
+                <TextField label="Bloc" value={form.bloc} onChange={(value) => setField("bloc", value)} />
+                <TextField label="Scară" value={form.scara} onChange={(value) => setField("scara", value)} />
+                <TextField label="Etaj" value={form.etaj} onChange={(value) => setField("etaj", value)} />
+                <TextField label="Apartament" value={form.apartament} onChange={(value) => setField("apartament", value)} />
+                <TextField label="Nr. cadastral" value={form.nrCadastral} onChange={(value) => setField("nrCadastral", value)} />
+                <TextField label="Nr. CF" value={form.nrCF} onChange={(value) => setField("nrCF", value)} />
+              </FormGrid>
+            </FormSection>
 
-              return (
-                <div
-                  key={typeof s === "string" ? `${label}-${index}` : s.id ?? label}
-                  onMouseDown={() => {
-                    onChange(label);
-                    onSelectSuggestion?.(s);
-                    setOpen(false);
-                  }}
-                  style={{
-                    padding: "8px 12px",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "#f5f5f5";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "transparent";
-                  }}
-                >
-                  {label}
-                </div>
-              );
-            })}
-          </div>,
-          document.body
+            <FormSection title="Priza de pământ (PRM)" description="Valoarea calculată se actualizează automat: măsurat × coeficient.">
+              <FormGrid cols={3}>
+                <TextField label="PRM măsurat (Ω)" type="number" step="0.01" value={form.prm_Masurat} onChange={(value) => setField("prm_Masurat", value)} />
+                <SelectField label="Coeficient sezonier" value={form.coeficientPRM} onChange={(value) => setField("coeficientPRM", value)} options={prmCoefficients} />
+                <Field label="PRM calculat (Ω)"><input className="input is-computed" value={prmCalculated} readOnly tabIndex={-1} /></Field>
+              </FormGrid>
+            </FormSection>
+
+            <FormSection title="Panouri" description="Puterea se completează din model când alegi o sugestie." actions={<span className="pill plain neutral tabular">Total {formatNumber(panelKwp, 3)} kWp</span>}>
+              {renderEquipment("datePanouri")}
+            </FormSection>
+
+            <FormSection title="Invertoare" actions={<span className="pill plain neutral tabular">Total {formatNumber(inverterKw, 2)} kW</span>}>
+              {renderEquipment("dateInvertoare")}
+            </FormSection>
+
+            <FormSection title="Baterii" description="Opțional, pentru sisteme cu stocare.">
+              {renderEquipment("dateBaterii")}
+            </FormSection>
+
+            <FormSection title="Accesorii">
+              <FormGrid cols={2}>
+                <Field label="Sistem backup">
+                  <Combobox value={form.backup} onChange={(value) => setField("backup", value)} suggestions={suggestions.backup || []} placeholder="ex: Huawei SmartGuard-63A-T0" />
+                </Field>
+                <Field label="Smart meter">
+                  <Combobox value={form.smartMeter} onChange={(value) => setField("smartMeter", value)} suggestions={suggestions.smartmeter || []} placeholder="ex: Huawei Smart Meter DTSU666-H" />
+                </Field>
+              </FormGrid>
+            </FormSection>
+          </div>
         )}
-    </>
+      </div>
+      <footer className="dialog-footer">
+        <span className="dialog-footer-note"><i>*</i> Câmp obligatoriu</span>
+        <div className="dialog-footer-actions">
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={submitting}>Anulează</button>
+          <button type="submit" className="btn btn-primary" disabled={submitting || loadingProject}>{submitting ? "Se salvează…" : isEdit ? "Salvează modificările" : "Salvează proiectul"}</button>
+        </div>
+      </footer>
+    </form>
   );
 }

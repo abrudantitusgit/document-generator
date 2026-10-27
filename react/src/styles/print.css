@@ -1,0 +1,29 @@
+/* Printed reports: drop the app chrome and controls, keep cards and tables. */
+@media print {
+  /* Always print on the light palette, whatever theme is on screen. */
+  html:root, html:root[data-theme] {
+    color-scheme: light;
+    --bg: #fff; --surface: #fff; --surface-2: #f8faf9; --surface-3: #eef2f0;
+    --border: #dfe6e2; --border-strong: #cfd9d4;
+    --text: #15231e; --text-2: #475750; --text-3: #6b7a73;
+    --brand: #176b54; --brand-soft: #e7f3ed; --brand-ring: #cfe6da; --brand-ink: #135c48;
+    --series-1: #1baf7a; --series-2: #eb6834; --chart-grid: #e8edea;
+  }
+  body { background: #fff; font-size: 11px; }
+  .sidebar, .sidebar-backdrop, .topbar, .page-footer, .toolbar, .no-print,
+  .row-actions, .pagination, .segmented, .notice-close, .search-input { display: none !important; }
+  .workspace { margin-left: 0; }
+  .page-content { max-width: none; padding: 0; }
+  .page { gap: 14px; }
+  .card { box-shadow: none; break-inside: avoid; }
+  .table-card { break-inside: auto; }
+  .table-scroll { overflow: visible; }
+  .data-table { font-size: 10px; }
+  .data-table th, .data-table td { height: auto; padding: 5px 6px; }
+  .data-table thead { display: table-header-group; }
+  .data-table tr { break-inside: avoid; }
+  .cell-clip { max-width: none; white-space: normal; }
+  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .report-grid { grid-template-columns: 1fr 1fr; }
+  .chart-tooltip { display: none; }
+}

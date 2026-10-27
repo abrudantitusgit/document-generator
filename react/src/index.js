@@ -3,6 +3,13 @@ import ReactDOM from 'react-dom';
 import { BrowserRouter, Route } from 'react-router-dom';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import './styles/index.css';
+
+// Apply the saved theme before the first paint so dark mode does not flash.
+try {
+  const savedTheme = localStorage.getItem('ovinstal-theme');
+  if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+} catch { /* storage blocked: the OS preference applies */ }
 
 ReactDOM.render(
   <BrowserRouter basename={'/'}>

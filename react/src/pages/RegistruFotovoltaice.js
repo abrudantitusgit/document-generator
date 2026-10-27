@@ -1,641 +1,233 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { FiBattery, FiChevronDown, FiChevronRight, FiCpu, FiDownload, FiEdit2, FiFileText, FiPlus, FiRefreshCw, FiSun, FiTrash2, FiZap } from "react-icons/fi";
 import { baseUrl } from "../config/api";
-import ProiectFotovoltaice from "./ProiectFotovoltaice.js";
-import Modal from "../components/Modal.js";
-import GenerateFotovoltaice from "./GenerateFotovoltaice.js"
+import { apiList, apiRequest } from "../lib/api";
+import { formatAddress, formatDate, formatNumber } from "../lib/format";
+import DocumentGenerator from "../components/DocumentGenerator";
+import { ConfirmDialog, DataTable, Dialog, FilterSelect, Notice, PageHeader, SearchInput, StatCard, StatGrid, Toolbar, distinctOptions } from "../components/ui";
+import ProiectFotovoltaice from "./ProiectFotovoltaice";
 
-export default function ProiecteFotovoltaiceList() {
+const projectId = (project) => project.id ?? project.ID;
+const kwp = (project) => project.putereTotalaPanouri != null ? Number(project.putereTotalaPanouri) / 1000 : null;
+const fullAddress = (project) => [formatAddress(project), project.judet && `jud. ${project.judet}`].filter(Boolean).join(", ");
+const show = (value) => value == null || value === "" ? <span className="cell-empty">—</span> : value;
 
+function EquipmentCard({ icon: Icon, title, head, rows, empty }) {
+  return (
+    <div className="equipment-card">
+      <div className="equipment-card-title"><Icon aria-hidden="true" /><strong>{title}</strong><span className="count-badge">{rows.length}</span></div>
+      {rows.length ? (
+        <div className="table-scroll">
+          <table className="mini-table">
+            <thead><tr>{head.map((label, index) => <th key={label} className={index && index < head.length - 1 ? "align-right" : undefined}>{label}</th>)}</tr></thead>
+            <tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, index) => <td key={index} className={index && index < row.length - 1 ? "align-right" : "cell-wrap"}>{show(cell)}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      ) : <p className="muted equipment-empty">{empty}</p>}
+    </div>
+  );
+}
+
+function ProjectDetails({ project }) {
+  return (
+    <div className="pv-details">
+      <dl className="pv-facts">
+        <div><dt>Amplasare</dt><dd>{show(project.amplasare)}</dd></div>
+        <div><dt>Nr. cadastral</dt><dd>{show(project.nrCadastral)}</dd></div>
+        <div><dt>Nr. CF</dt><dd>{show(project.nrCF)}</dd></div>
+        <div><dt>Coeficient PRM</dt><dd>{show(project.prM_Coeficient)}</dd></div>
+        <div><dt>Sistem backup</dt><dd>{show(project.backup)}</dd></div>
+        <div><dt>Smart meter</dt><dd>{show(project.smartMeter)}</dd></div>
+      </dl>
+      <div className="equipment-grid">
+        <EquipmentCard icon={FiSun} title="Panouri" empty="Nu există panouri." head={["Model", "Nr.", "Putere (W)", "Total (kWp)", "Serii"]}
+          rows={(project.datePanouri || []).map((item) => [item.model, item.nrPanouri, formatNumber(item.putereInstalata, 0), formatNumber((Number(item.nrPanouri || 0) * Number(item.putereInstalata || 0)) / 1000, 3), item.serie])} />
+        <EquipmentCard icon={FiCpu} title="Invertoare" empty="Nu există invertoare." head={["Model", "Nr.", "Putere (kW)", "Serie"]}
+          rows={(project.dateInvertoare || []).map((item) => [item.model, item.nrInvertoare, formatNumber(item.putereInstalata, 2), item.serie])} />
+        <EquipmentCard icon={FiBattery} title="Baterii" empty="Nu există baterii." head={["Model", "Nr.", "Putere (kW)", "Capacitate (Ah)", "Serie"]}
+          rows={(project.dateBaterii || []).map((item) => [item.model, item.nrBaterii, formatNumber(item.putereInstalata, 2), formatNumber(item.capacitate, 2), item.serie])} />
+      </div>
+    </div>
+  );
+}
+
+export default function RegistruFotovoltaice() {
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const [q, setQ] = useState("");
-  const [filterCounty, setFilterCounty] = useState("");
-  const [filterSystem, setFilterSystem] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState(null);
+  const [search, setSearch] = useState("");
+  const [county, setCounty] = useState("");
+  const [system, setSystem] = useState("");
   const [expanded, setExpanded] = useState(() => new Set());
-  const [editing, setEditing] = useState(null);
-  const [isEditOpen, setIsEditOpen]=useState(false);
-  const [isAddOpen, setIsAddOpen]=useState(false);
-  const [generating, setGenerating]=useState(null);
-  const [isGenerateOpen, setIsGenerateOpen]=useState(false);
-  const [sortBy, setSortBy] = useState("nrProiect"); // data, nrProiect, client
-  const [sortDir, setSortDir] = useState("desc"); // asc, desc
-  console.log("In Registru")
-  
-  const load = async () => {
+  const [editor, setEditor] = useState(null); // { id } for edit, {} for create
+  const [editorBusy, setEditorBusy] = useState(false);
+  const [generating, setGenerating] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(async () => {
     setLoading(true);
-    setErr("");
     try {
-      const res = await fetch(`${baseUrl}/proiectfotovoltaice`);
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`Eroare ${res.status}: ${t}`);
-      }
-      const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setErr(e?.message || "Eroare la încărcare proiecte.");
+      setItems(await apiList("/proiectfotovoltaice"));
+    } catch (error) {
       setItems([]);
+      setNotice({ type: "error", text: error.message || "Proiectele nu au putut fi încărcate." });
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  
-  
-  const toggle = (id) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  useEffect(() => { load(); }, [load]);
+
+  const visible = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("ro");
+    return items.filter((project) => {
+      if (county && project.judet !== county) return false;
+      if (system && project.tipSistem !== system) return false;
+      if (!query) return true;
+      return [
+        project.nrProiect, project.nrPV, project.judet, project.localitatea, project.comuna, project.strada, project.pod, project.tipSistem,
+        project.client?.nume, project.client?.cnp, project.firma?.nume,
+        ...(project.dateInvertoare || []).map((item) => item.model),
+        ...(project.datePanouri || []).map((item) => item.model),
+        ...(project.dateBaterii || []).map((item) => item.model),
+      ].filter((value) => value != null).join(" ").toLocaleLowerCase("ro").includes(query);
     });
-  };
+  }, [items, search, county, system]);
 
+  const totals = useMemo(() => ({
+    kwp: visible.reduce((sum, project) => sum + (kwp(project) || 0), 0),
+    inverter: visible.reduce((sum, project) => sum + Number(project.putereTotalaInvertor || 0), 0),
+    withBattery: visible.filter((project) => project.dateBaterii?.length).length,
+  }), [visible]);
 
-  const startEdit = (p) => {
-    setIsEditOpen(true);
-    setEditing(p.id ?? p.ID);
-};
-  const startGenerate = (p) => {
-    setIsGenerateOpen(true);
-    setGenerating(p);
-};
+  const toggle = (id) => setExpanded((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
-
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    let list = items;
-
-    if (s) {
-      list = list.filter((p) => {
-        const hay = [
-          p.nrProiect,
-          p.judet,
-          p.localitatea,
-          p.comuna,
-          p.strada,
-          p.pod,
-          p.tipSistem,
-          p.client?.nume,
-          p.dateInvertoare?.map(i => i.model).join(" "),
-          p.datePanouri?.map(i => i.model).join(" "),
-          p.dateBaterii?.map(i => i.model).join(" "),
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-
-        return hay.includes(s);
-      });
+  const confirmDelete = async () => {
+    const id = projectId(pendingDelete);
+    setDeleting(true);
+    try {
+      await apiRequest(`/proiectfotovoltaice/${id}`, { method: "DELETE", fallbackError: "Ștergerea nu a reușit." });
+      setItems((current) => current.filter((project) => projectId(project) !== id));
+      setNotice({ type: "success", text: `Proiectul ${pendingDelete.nrProiect} a fost șters.` });
+    } catch (error) {
+      setNotice({ type: "error", text: error.message });
+    } finally {
+      setDeleting(false);
+      setPendingDelete(null);
     }
-
-    if (filterCounty) list = list.filter((project) => project.judet === filterCounty);
-    if (filterSystem) list = list.filter((project) => project.tipSistem === filterSystem);
-
-    // sort desc by data (dacă lipsește, lasă jos)
-    list = [...list].sort((a, b) => {
-      let va, vb;
-
-      switch (sortBy) {
-        case "nrProiect":
-          va = a.nrProiect ?? "";
-          vb = b.nrProiect ?? "";
-          break;
-
-        case "client":
-          va = a.client?.nume ?? "";
-          vb = b.client?.nume ?? "";
-          break;
-
-        case "data":
-        default:
-          va = a.data ? new Date(a.data).getTime() : 0;
-          vb = b.data ? new Date(b.data).getTime() : 0;
-          break;
-      }
-
-      if (va < vb) return sortDir === "asc" ? -1 : 1;
-      if (va > vb) return sortDir === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return list;
-  }, [items, q, filterCounty, filterSystem, sortBy, sortDir]);
-
-  const counties = [...new Set(items.map((item) => item.judet).filter(Boolean))].sort();
-  const systemTypes = [...new Set(items.map((item) => item.tipSistem).filter(Boolean))].sort();
-
-  const formatDate = (iso) => {
-    if (!iso) return "-";
-
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-
-    return d.toLocaleDateString("ro-RO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
   };
 
-const startAutocomplete = async (p) => {
-  try {
-    const res = await fetch("http://localhost:5001/autocomplete", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(p)
-    });
-
-    const data = await res.json();
-
-    console.log(data);
-    return data;
-
-  } catch (err) {
-    console.error("Eroare:", err);
-  }
-};
-
-const onDelete = async (id) => {
-  if (!window.confirm("Sigur ștergi proiectul?")) return;
-
-  try {
-    const res = await fetch(`${baseUrl}/proiectfotovoltaice/${id}`, {
-      method: "DELETE",
-    });
-
-    if (!res.ok) {
-      throw new Error(await res.text());
-    }
-
-    // scoate din listă fără reload
-    setItems((prev) =>
-      prev.filter((x) => (x.id ?? x.ID) !== id)
-    );
-  } catch (e) {
-    alert(e?.message || "Eroare la ștergere");
-  }
-};
-
-  const handleExport =  () => {
-     const apiUrl =`${baseUrl}/proiectfotovoltaice/export`;
-  // navigare directă către endpoint => download normal
-    window.location.assign(apiUrl);
+  const onSaved = (isEdit) => {
+    setEditor(null);
+    setNotice({ type: "success", text: isEdit ? "Proiectul a fost actualizat." : "Proiectul a fost creat." });
+    load();
   };
 
+  const filtered = Boolean(search || county || system);
+
+  const columns = useMemo(() => [
+    { key: "nr", label: "Nr. proiect", nowrap: true, value: (row) => Number(row.nrProiect) || row.nrProiect, render: (row) => <><span className="tag">{row.nrProiect ?? "—"}</span><span className="cell-sub">PV {row.nrPV ?? "—"}</span></> },
+    { key: "data", label: "Data", nowrap: true, value: (row) => row.data ? new Date(row.data).getTime() : null, render: (row) => show(formatDate(row.data)) },
+    { key: "client", label: "Beneficiar", primary: true, value: (row) => row.client?.nume, render: (row) => <>{row.client?.nume || "—"}{row.firmaID && row.firma && <span className="cell-sub">{row.firma.nume}</span>}</> },
+    { key: "id", label: "CNP / CUI", nowrap: true, value: (row) => row.client?.cnp, render: (row) => <>{show(row.client?.cnp)}{row.firmaID && row.firma?.cui && <span className="cell-sub">CUI {row.firma.cui}</span>}</> },
+    { key: "tip", label: "Sistem", value: (row) => row.tipSistem, render: (row) => row.tipSistem ? <span className={`pill plain ${row.tipSistem === "Trifazat" ? "info" : "neutral"}`}>{row.tipSistem}</span> : show(null) },
+    { key: "pod", label: "POD", nowrap: true, value: (row) => row.pod },
+    { key: "adresa", label: "Adresă", value: (row) => fullAddress(row), render: (row) => <span className="cell-clip" title={fullAddress(row)}>{show(fullAddress(row))}</span> },
+    { key: "telefon", label: "Telefon", nowrap: true, value: (row) => row.client?.telefon },
+    { key: "kwp", label: "Panouri (kWp)", align: "right", value: kwp, render: (row) => show(formatNumber(kwp(row), 3)) },
+    { key: "inv", label: "Invertor (kW)", align: "right", value: (row) => row.putereTotalaInvertor, render: (row) => show(formatNumber(row.putereTotalaInvertor, 2)) },
+    { key: "bat", label: "Baterii (Ah)", align: "right", value: (row) => row.capacitateTotalaBaterii, render: (row) => show(formatNumber(row.capacitateTotalaBaterii, 2)) },
+    { key: "prm", label: "PRM măs. / calc.", align: "right", nowrap: true, value: (row) => row.prM_Calculat, render: (row) => <>{show(row.prM_Masurat)}<span className="cell-sub">{row.prM_Calculat ?? "—"}</span></> },
+  ], []);
 
   return (
-    <div style={{ margin: "0 auto", padding: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0 }}>Proiecte Fotovoltaice</h2>
+    <section className="page">
+      <PageHeader
+        eyebrow="Proiecte"
+        title="Proiecte fotovoltaice"
+        description="Registrul proiectelor PV: beneficiari, echipamente, PRM și documente generate."
+        actions={<>
+          <button type="button" className="btn btn-secondary btn-icon" onClick={load} disabled={loading} aria-label="Reîncarcă lista" title="Reîncarcă"><FiRefreshCw /></button>
+          <button type="button" className="btn btn-secondary" onClick={() => window.location.assign(`${baseUrl}/proiectfotovoltaice/export`)}><FiDownload /> Export Excel</button>
+          <button type="button" className="btn btn-primary" onClick={() => setEditor({})}><FiPlus /> Adaugă proiect</button>
+        </>}
+      />
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-         <button style={styles.btn} onClick={handleExport}>Export Excel</button>
-         
-          <button style={styles.btnAdd} onClick={() => setIsAddOpen(true)}>Adaugă Proiect</button>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Caută după nrProiect, județ, localitate, POD, tip..."
-            style={styles.input}
-          />
-          <select className="pv-toolbar-filter" aria-label="Filtrează după județ" value={filterCounty} onChange={(event) => setFilterCounty(event.target.value)}>
-            <option value="">Toate județele</option>{counties.map((county) => <option key={county} value={county}>{county}</option>)}
-          </select>
-          <select className="pv-toolbar-filter" aria-label="Filtrează după tipul sistemului" value={filterSystem} onChange={(event) => setFilterSystem(event.target.value)}>
-            <option value="">Toate sistemele</option>{systemTypes.map((system) => <option key={system} value={system}>{system}</option>)}
-          </select>
-          <div style={{ display: "flex", gap: 6 }}>
+      {notice && <Notice type={notice.type} onClose={() => setNotice(null)}>{notice.text}</Notice>}
 
-          <button
-            style={styles.btn}
-            onClick={() => {
-              setSortBy("data");
-              setSortDir(sortDir === "asc" ? "desc" : "asc");
-            }}
-          >
-            Sortează după dată {sortBy === "data" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-          </button>
+      <StatGrid>
+        <StatCard label="Proiecte" value={formatNumber(visible.length)} loading={loading} icon={FiZap} tone="orange" foot={filtered ? `din ${formatNumber(items.length)} în total` : "Toate proiectele PV"} />
+        <StatCard label="Putere panouri" value={formatNumber(totals.kwp, 2)} unit="kWp" loading={loading} icon={FiSun} tone="amber" foot="Însumată pe proiectele afișate" />
+        <StatCard label="Putere invertoare" value={formatNumber(totals.inverter, 2)} unit="kW" loading={loading} icon={FiCpu} tone="blue" foot="Însumată pe proiectele afișate" />
+        <StatCard label="Cu stocare" value={formatNumber(totals.withBattery)} loading={loading} icon={FiBattery} tone="green" foot={visible.length ? `${Math.round((totals.withBattery / visible.length) * 100)}% au baterii` : "—"} />
+      </StatGrid>
 
-          <button
-            style={styles.btn}
-            onClick={() => {
-              setSortBy("nrProiect");
-              setSortDir(sortDir === "asc" ? "desc" : "asc");
-            }}
-          >
-            Sortează nr proiect {sortBy === "nrProiect" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-          </button>
+      <Toolbar filters={<>
+        <FilterSelect label="Județ" value={county} onChange={setCounty} options={distinctOptions(items, (item) => item.judet)} />
+        <FilterSelect label="Sistem" value={system} onChange={setSystem} options={distinctOptions(items, (item) => item.tipSistem)} />
+      </>}>
+        <SearchInput value={search} onChange={setSearch} placeholder="Caută după nr., client, localitate, POD, echipament…" />
+      </Toolbar>
 
-          <button
-            style={styles.btn}
-            onClick={() => {
-              setSortBy("client");
-              setSortDir(sortDir === "asc" ? "desc" : "asc");
-            }}
-          >
-            Sortează client {sortBy === "client" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-          </button>
-
-        </div>
-          <button onClick={load} style={styles.btn} disabled={loading}>
-            {loading ? "Refresh..." : "Refresh"}
-          </button>
-        </div>
-      </div>
-
-      {err && (
-        <div style={{ ...styles.alert, background: "#fdecea", borderColor: "#e74c3c" }}>
-          {err}
-        </div>
-      )}
-
-      <div style={{ marginTop: 12, color: "#666" }}>
-        {loading ? "Se încarcă..." : `Rezultate: ${filtered.length} / ${items.length}`}
-      </div>
-
-    
-
-      <div style={{ marginTop: 12, overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff" }}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Nr Proiect</th>
-              <th style={styles.th}>Nr PV</th>
-              <th style={styles.th}>Data</th>
-              <th style={styles.th}>Client</th>
-              <th style={styles.th}>CNP</th>
-              <th style={styles.th}>Firmă</th>
-              <th style={styles.th}>CUI</th>
-              <th style={styles.th}>Tip Sistem</th>
-              <th style={styles.th}>POD</th>
-              <th style={styles.th}>Adresă</th>
-              <th style={styles.th}>Telefon</th>
-              <th style={styles.th}>Panouri (kW)</th>
-              <th style={styles.th}>Invertor (kW)</th>
-              <th style={styles.th}>Baterii (Ah)</th>
-              <th style={styles.th}>PRM Masurat</th>
-              <th style={styles.th}>PRM Calculat</th>
-              <th style={styles.th}>Acțiuni</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {filtered.map((p) => {
-              const id = p.id || p.ID;
-              const isOpen = expanded.has(id);
-
-              const adresa =
-                [
-                  p.localitatea && `loc. ${p.localitatea}`,
-                  p.comuna && `com. ${p.comuna}`,
-                  p.strada && `str. ${p.strada}`,
-                  p.nrStrada && `nr. ${p.nrStrada}`,
-                  p.apartament && `ap. ${p.apartament}`,
-                  p.judet && `jud. ${p.judet}`,
-                ]
-                  .filter(Boolean)
-                  .join(", ") || "-";
-
-              const panouriKw =
-                p.putereTotalaPanouri != null
-                  ? (Number(p.putereTotalaPanouri) / 1000).toFixed(3)
-                  : "-";
-
-              const invertorKw =
-                p.putereTotalaInvertor != null
-                  ? Number(p.putereTotalaInvertor).toFixed(2)
-                  : "-";
-
-              const bateriiAh =
-                p.capacitateTotalaBaterii != null
-                  ? Number(p.capacitateTotalaBaterii).toFixed(2)
-                  : "-";
-
-              return (
-                <React.Fragment key={id}>
-                  <tr style={{ borderTop: "1px solid #f1f1f1" }}>
-                    <td style={styles.td}>{p.nrProiect ?? "-"}</td>
-                    <td style={styles.td}>{p.nrPV ?? "-"}</td>
-                    <td style={styles.td}>{formatDate(p.data)}</td>
-                    <td style={styles.td}>{p.client?.nume ?? "-"}</td>
-                    <td style={styles.td}>{p.client?.cnp ?? "-"}</td>
-                    <td style={styles.td}>{p.firmaID ? (p.firma?.nume ?? "-") : "-"}</td>
-                    <td style={styles.td}>{p.firmaID ? (p.firma?.cui ?? "-") : "-"}</td>
-                    <td style={styles.td}>{p.tipSistem ?? "-"}</td>
-                    <td style={styles.td}>{p.pod ? p.pod : "-"}</td>
-                    <td style={styles.td}>{adresa}</td>
-                    <td style={styles.td}>{p.client?.telefon ?? "-"}</td>
-                    <td style={styles.td}>{panouriKw}</td>
-                    <td style={styles.td}>{invertorKw}</td>
-                    <td style={styles.td}>{bateriiAh}</td>
-                    <td style={styles.td}>{(p.prM_Masurat ?? "-").toString()}</td>
-                    <td style={styles.td}>{(p.prM_Calculat ?? "-").toString()}</td>
-
-                    <td style={{ ...styles.td, whiteSpace: "nowrap" }}>
-                      <button onClick={() => toggle(id)} style={styles.btnPrimary}>
-                        {isOpen ? "Ascunde" : "Detalii"}
-                      </button>{" "}
-                      <button onClick={() => onDelete(id)} style={styles.btnDanger}>
-                        Șterge
-                      </button>{" "}
-                      <button onClick={() => startEdit(p)} style={styles.btnEdit}>
-                        Edit
-                      </button>{" "}
-                      <button onClick={() => startGenerate(p)} style={styles.btnGenerate}>
-                        Generează Word
-                      </button>
-                    
-                     { /*<button onClick={() => startAutocomplete(p)} style={styles.btn}>
-                        Autocomplete Electrica
-                      </button>*/ }
-                    
-                    </td>
-                  </tr>
-
-                  {isOpen && (
-                   <tr>
-                  <td style={{padding: 12, background: "#ffffff" }} colSpan={17}>
-                      <div style={{display:"grid",width:"100%",gridTemplateColumns: "1fr 1fr",gap: 20,alignItems: "start"}}> 
-                          <DetailsBlock title="Invertoare">
-                            <SimpleTable
-                          
-                              headers={["Nume", "Nr", "Putere instalată (kW)", "Serie"]}
-                              rows={(p.dateInvertoare ?? []).map((x) => [
-                                x.model ?? "-",
-                                x.nrInvertoare ?? "-",
-                                x.putereInstalata ?? "-",
-                                x.serie ?? "-",
-                              ])}
-                              emptyText="Nu există invertoare."
-                            />
-                          </DetailsBlock>
-
-                          <DetailsBlock title="Panouri">
-                            <SimpleTable
-                              headers={["Nume", "Nr panouri", "Putere panou (W)", "Serii", "Total (kW)"]}
-                              rows={(p.datePanouri ?? []).map((x) => {
-                                const nr = Number(x.nrPanouri ?? 0);
-                                const pw = Number(x.putereInstalata ?? 0);
-                                return [x.model ?? "-", nr, pw, x.serie ?? "-", ((nr * pw) / 1000).toFixed(3)];
-                              })}
-                              emptyText="Nu există panouri."
-                            />
-                          </DetailsBlock>
-             
-                          <DetailsBlock title="Baterii">
-                            <SimpleTable
-                              headers={["Nume", "Nr baterii", "Putere baterie (kW)", "Capacitate (Ah)", "Serie"]}
-                              rows={(p.dateBaterii ?? []).map((x) => {
-                                const nr = Number(x.nrBaterii ?? 0);
-                                const pw = Number(x.putereInstalata ?? 0);
-                                const cap = Number(x.capacitate ?? 0);
-                                return [x.model ?? "-", nr, pw, cap, x.serie ?? "-"];
-                              })}
-                              emptyText="Nu există baterii"
-                            />
-                          </DetailsBlock>
-                
-                          <DetailsBlock title="Accesorii">
-                            <SimpleTable
-                              headers={["Sistem Backup", "Smart Meter"]}
-                              rows={p.backup || p.smartMeter ? [[p.backup || "-", p.smartMeter || "-"]] : []}
-                              emptyText="Nu există"
-                            />
-                          </DetailsBlock>
-                 
-           </div>  
-                  
-                    </td>
-                  </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <Modal
-        open={isEditOpen}
-        onClose={() => setIsEditOpen(false)}
-        width={1300}
-      >
-        <ProiectFotovoltaice id={editing}
-        onSuccess={(updated) => {
-            const updatedId = updated.id;
-
-            setItems((prev) =>
-              prev.map((p) => {
-                const pid = p.id ;
-                return pid === updatedId ? updated : p;
-              })
-            );
-
-            setIsEditOpen(false);
-            setEditing(null);
+      <DataTable
+        title="Proiecte"
+        columns={columns}
+        rows={visible}
+        rowKey={projectId}
+        loading={loading}
+        filtered={filtered}
+        initialSort={{ key: "nr", dir: "desc" }}
+        expandedKeys={expanded}
+        renderDetail={(project) => <ProjectDetails project={project} />}
+        emptyTitle="Nu există proiecte fotovoltaice încă"
+        emptyText="Adaugă primul proiect cu butonul „Adaugă proiect”."
+        actions={(project) => {
+          const id = projectId(project);
+          const open = expanded.has(id);
+          return <>
+            <button type="button" className={`icon-action${open ? " is-active" : ""}`} onClick={() => toggle(id)} aria-expanded={open} title={open ? "Ascunde echipamentele" : "Vezi echipamentele"} aria-label="Detalii echipamente">{open ? <FiChevronDown /> : <FiChevronRight />}</button>
+            <button type="button" className="icon-action is-brand" onClick={() => setGenerating(project)} title="Generează documente" aria-label="Generează documente"><FiFileText /></button>
+            <button type="button" className="icon-action is-brand" onClick={() => setEditor({ id })} title="Modifică" aria-label="Modifică proiectul"><FiEdit2 /></button>
+            <button type="button" className="icon-action is-danger" onClick={() => setPendingDelete(project)} title="Șterge" aria-label="Șterge proiectul"><FiTrash2 /></button>
+          </>;
         }}
-         />
-      </Modal>
+      />
 
-      <Modal open={isAddOpen} onClose={() => setIsAddOpen(false)} width={1300}>
-        <ProiectFotovoltaice onSuccess={(created) => {
-          setItems((previous) => [created, ...previous]);
-          setIsAddOpen(false);
-        }} />
-      </Modal>
+      <Dialog
+        open={Boolean(editor)}
+        onClose={() => setEditor(null)}
+        busy={editorBusy}
+        size="lg"
+        eyebrow={editor?.id ? "Editare" : "Proiect nou"}
+        title={editor?.id ? "Modifică proiectul fotovoltaic" : "Adaugă proiect fotovoltaic"}
+      >
+        {editor && <ProiectFotovoltaice id={editor.id} onSuccess={() => onSaved(Boolean(editor.id))} onCancel={() => setEditor(null)} onBusyChange={setEditorBusy} />}
+      </Dialog>
 
-    <Modal open={isGenerateOpen} onClose={() => setIsGenerateOpen(false)} width={1300}>
-        <GenerateFotovoltaice proiect={generating}/>
-    </Modal>
+      <Dialog
+        open={Boolean(generating)}
+        onClose={() => setGenerating(null)}
+        size="lg"
+        eyebrow="Generare documente"
+        title={generating ? `Proiect nr. ${generating.nrProiect}` : ""}
+        description={generating ? [generating.firma?.nume || generating.client?.nume, fullAddress(generating)].filter(Boolean).join(" · ") : undefined}
+      >
+        {generating && <DocumentGenerator groupName="Fotovoltaice" endpoint="/word/createfotovoltaice" project={generating} variant="dialog" onClose={() => setGenerating(null)} />}
+      </Dialog>
 
-    </div>
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        busy={deleting}
+        title="Ștergi proiectul fotovoltaic?"
+        message={pendingDelete && <>Proiectul <strong>nr. {pendingDelete.nrProiect}</strong>{pendingDelete.client?.nume ? ` (${pendingDelete.client.nume})` : ""} și echipamentele lui vor fi șterse definitiv.</>}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+    </section>
   );
 }
-
-function DetailsBlock({ title, children }) {
-  return (
-    <div style={{ width:"100%",minWidth: 0, paddingTop: 10, paddingLeft:10, marginTop: 10,borderLeft: "1px solid #ddd", borderBottom: "1px solid #ddd"  }}>
-      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function SimpleTable({ headers, rows, emptyText }) {
-  if (!rows || rows.length === 0) return <div style={{ color: "#666" }}>{emptyText}</div>;
-
-  return (
-    <div style={{overflowX: "auto" }}>
-      <table style={{width:"100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            {headers.map((h) => (
-                <th
-              key={h}
-              style={{
-                ...styles.th,
-                width: h === "Serii" ? 400 : "auto",   // aici o faci mai îngustă
-              }}
-            >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, idx) => (
-            <tr key={idx} style={{ borderTop: "1px solid #f1f1f1" }}>
-              {r.map((cell, j) => (
-                <td key={j} style={styles.td}>
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-
-
-const styles = {
-
-th: {
-  textAlign: "left",
-  padding: 12,
-  fontSize: 13,
-  fontWeight: 600,
-  color: "#0d0e0e",
-  borderBottom: "1px solid #e5e7eb",
-  borderRight: "1px solid #f3f4f6",
-  whiteSpace: "nowrap",
-},
-
-td: {
-  padding: 12,
-  fontSize: 14,
-  fontWeight: 400,
-  color: "#111827",
-  borderRight: "1px solid #f3f4f6",
-  verticalAlign: "top",
-},
-  modalBackdrop: {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.4)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 1000,
-},
-modal: {
-  background: "#fff",
-  padding: 20,
-  borderRadius: 14,
-  width: 420,
-  display: "flex",
-  flexDirection: "column",
-  gap: 10,
-},
-  input: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #ccc",
-    minWidth: 420,
-    outline: "none",
-  },
-  card: {
-    border: "1px solid #ddd",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    background: "#fff",
-  },
-  badge: {
-    padding: "4px 8px",
-    borderRadius: 999,
-    border: "1px solid #111",
-    fontSize: 12,
-    fontWeight: 700,
-  },
-  badgeMuted: {
-    padding: "4px 8px",
-    borderRadius: 999,
-    border: "1px solid #ccc",
-    fontSize: 12,
-    fontWeight: 600,
-    color: "#444",
-  },
-  miniStat: {
-    border: "1px solid #eee",
-    borderRadius: 12,
-    padding: "8px 10px",
-    minWidth: 160,
-    background: "#fafafa",
-  },
-  alert: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid",
-    whiteSpace: "pre-wrap",
-  },
-    btnGenerate: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #3498db",
-    background: "#3498db", // albastru deschis
-    color: "#fff",
-    cursor: "pointer",
-    transition: "background 0.2s ease",
-  },
-  btn: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #bbb",
-    background: "#fff",
-    cursor: "pointer",
-  },
-  btnAdd: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #111",
-    background: "#04AA6D",
-    color: "#fff",
-    cursor: "pointer",
-  },
-    btnEdit: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #4d3a06",
-    background: "#f59e0b",
-    color: "#fff",
-    cursor: "pointer",
-  },
-  btnPrimary: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #111",
-    background: "#4e4e4e",
-    color: "#fff",
-    cursor: "pointer",
-  },
-  btnDanger: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #e74c3c",
-    background: "#fdecea",
-    cursor: "pointer",
-  }
-};

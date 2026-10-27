@@ -1,422 +1,132 @@
-import React, { useState, useEffect, useMemo } from "react";
-import FormTable from "../components/FormTable";
-import moment from "moment";
-import styled from "styled-components";
-import {
-  useTable,
-  useFilters,
-  useGlobalFilter,
-  useAsyncDebounce,
-  usePagination,
-} from "react-table";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as FileSaver from "file-saver";
 import * as XLSX from "xlsx";
-import { baseUrl } from "../config/api";
+import { FiCheckCircle, FiCreditCard, FiDownload, FiFileText, FiFolder, FiPrinter, FiRefreshCw } from "react-icons/fi";
+import { apiList } from "../lib/api";
+import { formatAddress, formatDate, formatMoney, formatNumber } from "../lib/format";
+import { DataTable, FilterSelect, Notice, PageHeader, SearchInput, StatCard, StatGrid, Toolbar, distinctOptions } from "../components/ui";
 
-const Styles = styled.div`
-  table {
-    border-spacing: 0;
-    border: 1px solid black;
-    table-layout: fixed;
+const yearOf = (value) => value ? String(new Date(value).getFullYear()) : "";
+const numbers = (items) => (items || []).map((item) => item.contor).filter((value) => value != null);
+const documentCount = (row) => (row.contorContract ? 1 : 0) + (row.contorProcesVerbal ? 1 : 0) + (row.contorBuletinCabluri?.length || 0) + (row.contorBuletinPrize?.length || 0);
 
-    tr {
-      :last-child {
-        td {
-          border-bottom: 0;
-        }
-      }
+const NumberList = ({ values }) => values.length ? <span className="number-list">{values.map((value, index) => <span key={`${value}-${index}`} className="tag">{value}</span>)}</span> : <span className="cell-empty">—</span>;
+
+export default function RegistruATR() {
+  const [rows, setRows] = useState([]);
+  const [exportRows, setExportRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [search, setSearch] = useState("");
+  const [locality, setLocality] = useState("");
+  const [year, setYear] = useState("");
+  const [atrStatus, setAtrStatus] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [projects, registry] = await Promise.all([apiList("/proiect/proiecteinclude"), apiList("/proiect/registru")]);
+      setRows(projects);
+      setExportRows(registry);
+    } catch (loadError) {
+      setError(loadError.message || "Registrul nu a putut fi încărcat.");
+    } finally {
+      setLoading(false);
     }
+  }, []);
 
-    th,
-    td {
-      margin: 0;
-      padding: 5px;
-      text-align: center;
-      :last-child {
-        border-right: 0;
-      }
-    }
+  useEffect(() => { load(); }, [load]);
 
-    tr:nth-child(even) {
-      background-color: #dddddd;
-    }
+  const visible = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("ro");
+    return rows.filter((row) => {
+      if (locality && row.localitatea !== locality) return false;
+      if (year && yearOf(row.data) !== year) return false;
+      if (atrStatus === "cu" && !row.atr) return false;
+      if (atrStatus === "fara" && row.atr) return false;
+      if (!query) return true;
+      return [row.nrProiect, row.client?.nume, row.firma?.nume, row.denumire, row.atr?.nrAtr, formatAddress(row)]
+        .filter((value) => value != null).join(" ").toLocaleLowerCase("ro").includes(query);
+    });
+  }, [rows, search, locality, year, atrStatus]);
 
-    td {
-      padding: 0px;
-      font-size: 15px;
-    }
-  }
-`;
+  const totals = useMemo(() => ({
+    withAtr: visible.filter((row) => row.atr).length,
+    value: visible.reduce((sum, row) => sum + Number(row.atr?.pret || 0), 0),
+    documents: visible.reduce((sum, row) => sum + documentCount(row), 0),
+  }), [visible]);
 
-function GlobalFilter({ preGlobalFilteredRows, globalFilter, setGlobalFilter }) {
-  const count = preGlobalFilteredRows.length;
-  const [value, setValue] = React.useState(globalFilter);
-  const onChange = useAsyncDebounce((val) => {
-    setGlobalFilter(val || undefined);
-  }, 200);
+  const filtered = Boolean(search || locality || year || atrStatus);
 
-  return (
-    <span>
-      Search:{" "}
-      <input
-        value={value || ""}
-        onChange={(e) => {
-          setValue(e.target.value);
-          onChange(e.target.value);
-        }}
-        placeholder={`${count} records...`}
-        style={{
-          fontSize: "1.1rem",
-          border: "0",
-        }}
-      />
-    </span>
-  );
-}
-
-function DefaultColumnFilter({
-  column: { filterValue, preFilteredRows, setFilter },
-}) {
-  const count = preFilteredRows.length;
-
-  return (
-    <input
-      value={filterValue || ""}
-      onChange={(e) => {
-        setFilter(e.target.value || undefined);
-      }}
-      placeholder={`Search ${count} records...`}
-    />
-  );
-}
-
-function Table({ columns, data }) {
-  const filterTypes = React.useMemo(
-    () => ({
-      text: (rows, id, filterValue) => {
-        return rows.filter((row) => {
-          const rowValue = row.values[id];
-          return rowValue !== undefined
-            ? String(rowValue)
-                .toLowerCase()
-                .startsWith(String(filterValue).toLowerCase())
-            : true;
-        });
-      },
-    }),
-    []
-  );
-
-  const defaultColumn = React.useMemo(
-    () => ({
-      Filter: DefaultColumnFilter,
-    }),
-    []
-  );
-
-  const {
-    getTableProps,
-    getTableBodyProps,
-    headerGroups,
-
-    // ✅ paginare
-    page,
-    canPreviousPage,
-    canNextPage,
-    pageOptions,
-    pageCount,
-    gotoPage,
-    nextPage,
-    previousPage,
-    setPageSize,
-
-    prepareRow,
-    state,
-    visibleColumns,
-    preGlobalFilteredRows,
-    setGlobalFilter,
-  } = useTable(
-    {
-      columns,
-      data,
-      defaultColumn,
-      filterTypes,
-      initialState: { pageIndex: 0, pageSize: 20 },
-    },
-    useFilters,
-    useGlobalFilter,
-    usePagination
-  );
-
-  const { pageIndex, pageSize } = state;
-
-  return (
-    <>
-      <table {...getTableProps()}>
-        <thead>
-          {headerGroups.map((headerGroup) => (
-            <tr {...headerGroup.getHeaderGroupProps()}>
-              {headerGroup.headers.map((column) => (
-                <th {...column.getHeaderProps()}>
-                  {column.render("Header")}
-                  <div>{column.canFilter ? column.render("Filter") : null}</div>
-                </th>
-              ))}
-            </tr>
-          ))}
-
-          <tr>
-            <th colSpan={visibleColumns.length} style={{ textAlign: "left" }}>
-              <GlobalFilter
-                preGlobalFilteredRows={preGlobalFilteredRows}
-                globalFilter={state.globalFilter}
-                setGlobalFilter={setGlobalFilter}
-              />
-            </th>
-          </tr>
-        </thead>
-
-        <tbody {...getTableBodyProps()}>
-          {page.map((row) => {
-            prepareRow(row);
-            return (
-              <tr {...row.getRowProps()}>
-                {row.cells.map((cell) => (
-                  <td {...cell.getCellProps()}>{cell.render("Cell")}</td>
-                ))}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      {/* ✅ controale paginare */}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          marginTop: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <button onClick={() => gotoPage(0)} disabled={!canPreviousPage}>
-          {"<<"}
-        </button>
-        <button onClick={() => previousPage()} disabled={!canPreviousPage}>
-          {"<"}
-        </button>
-        <button onClick={() => nextPage()} disabled={!canNextPage}>
-          {">"}
-        </button>
-        <button
-          onClick={() => gotoPage(pageCount - 1)}
-          disabled={!canNextPage}
-        >
-          {">>"}
-        </button>
-
-        <span style={{ marginLeft: 8 }}>
-          Pagina{" "}
-          <strong>
-            {pageIndex + 1} / {pageOptions.length}
-          </strong>
-        </span>
-
-        <span>
-          | Mergi la pagina:{" "}
-          <input
-            type="number"
-            min={1}
-            max={pageOptions.length}
-            defaultValue={pageIndex + 1}
-            onChange={(e) => {
-              const p = e.target.value ? Number(e.target.value) - 1 : 0;
-              gotoPage(p);
-            }}
-            style={{ width: 80 }}
-          />
-        </span>
-
-        <select
-          value={pageSize}
-          onChange={(e) => setPageSize(Number(e.target.value))}
-        >
-          {[10, 20, 50, 100].map((size) => (
-            <option key={size} value={size}>
-              Arată {size}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <br />
-    </>
-  );
-}
-
-const RegistruATR = () => {
-  const [registruATR, setRegistruATR] = useState([]);
-  const [exportRegistruATR, setExportRegistruATR] = useState([]);
-
-  const fileType =
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8";
-  const fileExtension = ".xlsx";
-
-  const exportToCSV = (apiData, fileName) => {
-    const ws = XLSX.utils.json_to_sheet(apiData);
-    const wb = { Sheets: { Clienti: ws }, SheetNames: ["Clienti"] };
-    const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const data = new Blob([excelBuffer], { type: fileType });
-    FileSaver.saveAs(data, fileName + fileExtension);
+  // Export uses the API's flat registry rows, limited to the projects on screen.
+  const exportExcel = () => {
+    const shown = new Set(visible.map((row) => String(row.nrProiect)));
+    const data = filtered ? exportRows.filter((row) => shown.has(String(row.nrProiect))) : exportRows;
+    const sheet = XLSX.utils.json_to_sheet(data);
+    const workbook = { Sheets: { Clienti: sheet }, SheetNames: ["Clienti"] };
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    FileSaver.saveAs(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" }), `Registru Clienti - ${formatDate(new Date())}.xlsx`);
   };
 
-  useEffect(() => {
-    fetch(`${baseUrl}/proiect/proiecteinclude`)
-      .then((response) => response.json())
-      .then((data) => setRegistruATR(data))
-      .catch((error) => console.log(error));
-  }, []);
-
-  useEffect(() => {
-    fetch(`${baseUrl}/proiect/registru`)
-      .then((response) => response.json())
-      .then((data) => setExportRegistruATR(data))
-      .catch((error) => console.log(error));
-  }, []);
-
-  const columns = useMemo(
-    () => [
-      {
-        Header: "Client",
-        columns: [
-          {
-            Header: "Nr. Proiect",
-            accessor: "nrProiect",
-          },
-          {
-            Header: "Client",
-            accessor: (row) => {
-              return row.client.nume;
-            },
-          },
-          {
-            Header: "Firma",
-            accessor: (row) => {
-              return row.firma ? row.firma.nume : "-";
-            },
-          },
-        ],
-      },
-      {
-        Header: "Proiect",
-        columns: [
-          {
-            Header: "Nr. ATR",
-            accessor: (row) => {
-              return row.atr
-                ? row.atr.nrAtr +
-                    "/" +
-                    moment(row.atr.dataAtr).format("DD.MM.yyyy")
-                : " - / -";
-            },
-          },
-          {
-            Header: "Denumire",
-            accessor: "denumire",
-          },
-          {
-            Header: "Pret",
-            accessor: (row) => {
-              return row.atr ? row.atr.pret : "-";
-            },
-          },
-          {
-            Header: "Localitatea",
-            accessor: "localitatea",
-          },
-          {
-            Header: "Strada",
-            accessor: "strada",
-          },
-          {
-            Header: "Nr. Strada",
-            accessor: "nrStrada",
-          },
-          {
-            Header: "Apartament",
-            accessor: "apartament",
-          },
-          {
-            Header: "Data",
-            accessor: (row) => {
-              return row.data ? moment(row.data).format("DD.MM.yyyy") : "-";
-            },
-          },
-          {
-            Header: "Contract",
-            accessor: (row) => {
-              return row.contorContract ? row.contorContract.contor : "-";
-            },
-          },
-          {
-            Header: "Proces Verbal",
-            accessor: (row) => {
-              return row.contorProcesVerbal
-                ? row.contorProcesVerbal.contor
-                : "-";
-            },
-          },
-          {
-            Header: "Proces Verbal Cablu",
-            accessor: (row) => {
-              return row.contorProcesVerbal
-                ? row.contorProcesVerbal.cablu
-                : "-";
-            },
-          },
-          {
-            Header: "Buletin Cablu",
-            accessor: (row) => {
-              return row.contorBuletinCabluri.length > 0
-                ? row.contorBuletinCabluri.map((item) => item.contor) + ","
-                : "-";
-            },
-          },
-          {
-            Header: "Buletin Priza",
-            accessor: (row) => {
-              return row.contorBuletinPrize.length > 0
-                ? row.contorBuletinPrize.map((item) => item.contor) + ","
-                : "-";
-            },
-          },
-        ],
-      },
-    ],
-    []
-  );
-
-  const data = React.useMemo(() => registruATR, [registruATR]);
+  const columns = useMemo(() => [
+    { key: "nr", label: "Nr. proiect", value: (row) => row.nrProiect, render: (row) => <span className="tag">{row.nrProiect ?? "—"}</span> },
+    { key: "client", label: "Beneficiar", primary: true, value: (row) => row.client?.nume, render: (row) => <>{row.client?.nume || "—"}{row.firma && <span className="cell-sub">{row.firma.nume}</span>}</> },
+    { key: "atr", label: "ATR", nowrap: true, value: (row) => row.atr?.nrAtr, render: (row) => row.atr ? <>{row.atr.nrAtr}<span className="cell-sub">{formatDate(row.atr.dataAtr)}</span></> : <span className="pill neutral">Fără ATR</span> },
+    { key: "denumire", label: "Denumire", value: (row) => row.denumire },
+    { key: "adresa", label: "Adresă", value: (row) => formatAddress(row), render: (row) => <span className="cell-clip" title={formatAddress(row)}>{formatAddress(row) || "—"}</span> },
+    { key: "data", label: "Data", nowrap: true, value: (row) => row.data ? new Date(row.data).getTime() : null, render: (row) => formatDate(row.data) || <span className="cell-empty">—</span> },
+    { key: "pret", label: "Preț ATR", align: "right", nowrap: true, value: (row) => row.atr?.pret, render: (row) => row.atr?.pret != null ? formatMoney(row.atr.pret) : <span className="cell-empty">—</span> },
+    { key: "contract", label: "Contract", align: "center", value: (row) => row.contorContract?.contor, render: (row) => <NumberList values={numbers(row.contorContract ? [row.contorContract] : [])} /> },
+    { key: "pv", label: "Proces verbal", align: "center", value: (row) => row.contorProcesVerbal?.contor, render: (row) => <NumberList values={numbers(row.contorProcesVerbal ? [row.contorProcesVerbal] : [])} /> },
+    { key: "pvCablu", label: "PV cablu", align: "center", value: (row) => row.contorProcesVerbal?.cablu },
+    { key: "cablu", label: "Buletine cablu", render: (row) => <NumberList values={numbers(row.contorBuletinCabluri)} /> },
+    { key: "priza", label: "Buletine priză", render: (row) => <NumberList values={numbers(row.contorBuletinPrize)} /> },
+  ], []);
 
   return (
-    <FormTable title="Registru ATR">
-      <Styles>
-        <button
-          onClick={() =>
-            exportToCSV(
-              exportRegistruATR,
-              "Registru Clienti - " + moment().format("DD.MM.yyyy")
-            )
-          }
-        >
-          Export Excel
-        </button>
+    <section className="page report-page">
+      <PageHeader
+        eyebrow="Rapoarte"
+        title="Registru ATR"
+        description="Proiectele de branșament cu avizele ATR și numerele documentelor emise."
+        actions={<>
+          <button type="button" className="btn btn-secondary btn-icon no-print" onClick={load} disabled={loading} aria-label="Reîncarcă" title="Reîncarcă"><FiRefreshCw /></button>
+          <button type="button" className="btn btn-secondary no-print" onClick={() => window.print()}><FiPrinter /> Printează</button>
+          <button type="button" className="btn btn-primary no-print" onClick={exportExcel} disabled={loading || !exportRows.length}><FiDownload /> Export Excel{filtered ? " (filtrat)" : ""}</button>
+        </>}
+      />
 
-        <Table columns={columns} data={data} />
-      </Styles>
-    </FormTable>
+      {error && <Notice type="error" onClose={() => setError(null)}>{error}</Notice>}
+
+      <StatGrid>
+        <StatCard label="Proiecte" value={formatNumber(visible.length)} loading={loading} icon={FiFolder} tone="green" foot={filtered ? `din ${formatNumber(rows.length)} în total` : "Toate proiectele de branșament"} />
+        <StatCard label="Cu aviz ATR" value={formatNumber(totals.withAtr)} loading={loading} icon={FiCheckCircle} tone="blue" foot={visible.length ? `${Math.round((totals.withAtr / visible.length) * 100)}% din proiecte` : "—"} />
+        <StatCard label="Valoare ATR" value={formatNumber(totals.value, 2)} unit="lei" loading={loading} icon={FiCreditCard} tone="violet" foot="Suma prețurilor din avize" />
+        <StatCard label="Documente numerotate" value={formatNumber(totals.documents)} loading={loading} icon={FiFileText} tone="amber" foot="Contracte, procese verbale, buletine" />
+      </StatGrid>
+
+      <Toolbar filters={<>
+        <FilterSelect label="Localitate" value={locality} onChange={setLocality} options={distinctOptions(rows, (row) => row.localitatea)} />
+        <FilterSelect label="An" value={year} onChange={setYear} options={distinctOptions(rows, (row) => yearOf(row.data)).reverse()} />
+        <FilterSelect label="ATR" value={atrStatus} onChange={setAtrStatus} options={[{ value: "cu", label: "Cu ATR" }, { value: "fara", label: "Fără ATR" }]} />
+      </>}>
+        <SearchInput value={search} onChange={setSearch} placeholder="Caută după nr. proiect, client, ATR, adresă…" />
+      </Toolbar>
+
+      <DataTable
+        title="Registru"
+        subtitle={filtered ? "rezultate filtrate" : undefined}
+        columns={columns}
+        rows={visible}
+        rowKey={(row) => row.id}
+        loading={loading}
+        filtered={filtered}
+        initialSort={{ key: "nr", dir: "desc" }}
+        pageSizes={[50, 100, 500]}
+        emptyTitle="Registrul este gol"
+        emptyText="Proiectele de branșament adăugate vor apărea aici."
+      />
+    </section>
   );
-};
-
-export default RegistruATR;
+}

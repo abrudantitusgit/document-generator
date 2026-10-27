@@ -1,0 +1,149 @@
+/* Design tokens. Every color in the app comes from here so light and dark
+   themes stay in sync. The theme toggle sets data-theme on <html>; without it
+   the OS preference decides. */
+:root {
+  color-scheme: light;
+
+  --bg: #f4f6f5;
+  --surface: #ffffff;
+  --surface-2: #f8faf9;
+  --surface-3: #eef2f0;
+  --border: #e2e8e5;
+  --border-strong: #cfd9d4;
+
+  --text: #15231e;
+  --text-2: #475750;
+  --text-3: #75847d;
+  --text-on-brand: #ffffff;
+
+  --brand: #176b54;
+  --brand-hover: #10543f;
+  --brand-soft: #e7f3ed;
+  --brand-ring: #cfe6da;
+  --brand-ink: #135c48;
+
+  --danger: #b3423a;
+  --danger-hover: #973630;
+  --danger-soft: #fdf0ee;
+  --danger-border: #f1cdc9;
+  --warning: #8a6116;
+  --warning-soft: #fdf6e4;
+  --warning-border: #ecdcae;
+  --success: #24704c;
+  --success-soft: #edf7f1;
+  --success-border: #cbe4d6;
+  --info: #35659b;
+  --info-soft: #ecf3fb;
+
+  /* Chart series: validated pair (green = branșament, orange = fotovoltaic). */
+  --series-1: #1baf7a;
+  --series-2: #eb6834;
+  --chart-grid: #e8edea;
+
+  --tone-blue-bg: #eaf2fc;   --tone-blue: #3f6ea6;
+  --tone-violet-bg: #f1edfb; --tone-violet: #6f5ea8;
+  --tone-amber-bg: #fbf2df;  --tone-amber: #9a6e22;
+  --tone-green-bg: #e7f4ec;  --tone-green: #2f7a52;
+  --tone-orange-bg: #fcefe3; --tone-orange: #b0652a;
+  --tone-slate-bg: #edf1f2;  --tone-slate: #5c6f76;
+
+  --radius-sm: 6px;
+  --radius: 9px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(20, 40, 33, .05);
+  --shadow: 0 6px 22px rgba(20, 45, 37, .07);
+  --shadow-lg: 0 24px 70px rgba(10, 30, 24, .22);
+  --backdrop: rgba(14, 28, 23, .55);
+
+  --sidebar-w: 264px;
+  --topbar-h: 60px;
+  --font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0e1412;
+    --surface: #151d1a;
+    --surface-2: #19231f;
+    --surface-3: #1f2a26;
+    --border: #25312c;
+    --border-strong: #33423b;
+    --text: #e5eee9;
+    --text-2: #b1c0b9;
+    --text-3: #81918a;
+    --brand: #2f9d78;
+    --brand-hover: #3bb08a;
+    --brand-soft: #173329;
+    --brand-ring: #1f4a3b;
+    --brand-ink: #7fd3b2;
+    --danger: #e0716a;
+    --danger-hover: #ea8781;
+    --danger-soft: #34201e;
+    --danger-border: #553230;
+    --warning: #e3b45c;
+    --warning-soft: #322a17;
+    --warning-border: #54462a;
+    --success: #6ccb9c;
+    --success-soft: #16301f;
+    --success-border: #24503a;
+    --info: #86b3e6;
+    --info-soft: #182839;
+    --series-1: #2f9d78;
+    --series-2: #d95926;
+    --chart-grid: #24302b;
+    --tone-blue-bg: #1a2636;   --tone-blue: #8ab4e6;
+    --tone-violet-bg: #251f37; --tone-violet: #b3a6e8;
+    --tone-amber-bg: #30281a;  --tone-amber: #e1b665;
+    --tone-green-bg: #172d21;  --tone-green: #7ccfa1;
+    --tone-orange-bg: #33231a; --tone-orange: #eaa06a;
+    --tone-slate-bg: #1f272a;  --tone-slate: #a3b5bb;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow: 0 6px 22px rgba(0, 0, 0, .35);
+    --shadow-lg: 0 24px 70px rgba(0, 0, 0, .55);
+    --backdrop: rgba(0, 0, 0, .6);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e1412;
+  --surface: #151d1a;
+  --surface-2: #19231f;
+  --surface-3: #1f2a26;
+  --border: #25312c;
+  --border-strong: #33423b;
+  --text: #e5eee9;
+  --text-2: #b1c0b9;
+  --text-3: #81918a;
+  --brand: #2f9d78;
+  --brand-hover: #3bb08a;
+  --brand-soft: #173329;
+  --brand-ring: #1f4a3b;
+  --brand-ink: #7fd3b2;
+  --danger: #e0716a;
+  --danger-hover: #ea8781;
+  --danger-soft: #34201e;
+  --danger-border: #553230;
+  --warning: #e3b45c;
+  --warning-soft: #322a17;
+  --warning-border: #54462a;
+  --success: #6ccb9c;
+  --success-soft: #16301f;
+  --success-border: #24503a;
+  --info: #86b3e6;
+  --info-soft: #182839;
+  --series-1: #2f9d78;
+  --series-2: #d95926;
+  --chart-grid: #24302b;
+  --tone-blue-bg: #1a2636;   --tone-blue: #8ab4e6;
+  --tone-violet-bg: #251f37; --tone-violet: #b3a6e8;
+  --tone-amber-bg: #30281a;  --tone-amber: #e1b665;
+  --tone-green-bg: #172d21;  --tone-green: #7ccfa1;
+  --tone-orange-bg: #33231a; --tone-orange: #eaa06a;
+  --tone-slate-bg: #1f272a;  --tone-slate: #a3b5bb;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow: 0 6px 22px rgba(0, 0, 0, .35);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, .55);
+  --backdrop: rgba(0, 0, 0, .6);
+}
