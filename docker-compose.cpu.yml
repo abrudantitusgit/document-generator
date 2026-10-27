@@ -1,0 +1,12 @@
+# For machines without an NVIDIA GPU:
+#   docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d --build
+services:
+  id-ocr:
+    build:
+      args:
+        PADDLE_PACKAGE: paddlepaddle==3.4.0
+        PADDLE_INDEX: https://www.paddlepaddle.org.cn/packages/stable/cpu/
+    image: document-generator-id-ocr:cpu
+    environment:
+      OCR_DEVICE: cpu
+    deploy: !reset {}

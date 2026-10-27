@@ -42,10 +42,25 @@ services:
       context: ./backend/IdCardOcr
     container_name: scanner-doc-id-ocr
     restart: unless-stopped
-    volumes:
-      - easyocr_models:/root/.EasyOCR
+    environment:
+      # auto = gpu:0 when visible, else CPU; set to cpu to force it. Hosts without an
+      # NVIDIA driver need the CPU image (docker-compose.cpu.yml).
+      OCR_DEVICE: ${OCR_DEVICE:-auto}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     ports:
       - "127.0.0.1:5001:5001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 120s
+      retries: 6
 
   frontend:
     build:
@@ -63,4 +78,3 @@ volumes:
   app_temp:
   app_bransamente:
   app_fotovoltaice:
-  easyocr_models:

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { FiEdit2, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiX, FiUploadCloud } from "react-icons/fi";
-import { baseUrl } from "../config/api";
+import { baseUrl, ocrUrl } from "../config/api";
 import "../css/components/resource-workspace.css";
 
 const readJson = async (response) => {
@@ -108,8 +108,7 @@ export default function ResourceWorkspace({ definition }) {
     try {
       const form = new FormData();
       form.append("file", file);
-      const ocrUrl = `${window.location.protocol}//${window.location.hostname}:5001/extract`;
-      const response = await fetch(ocrUrl, { method: "POST", body: form });
+      const response = await fetch(`${ocrUrl}/extract`, { method: "POST", body: form });
       const result = await readJson(response);
       if (!response.ok) throw new Error(humanizeError(result, "Nu s-au putut citi datele din imagine."));
       const fields = result?.fields || {};

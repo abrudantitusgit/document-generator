@@ -7,6 +7,9 @@ const getBaseUrl = () => {
 
 export const baseUrl = getBaseUrl();
 
+// The Docker web server proxies /ocr to the ID card OCR service.
+export const ocrUrl = (process.env.REACT_APP_OCR_URL || "/ocr").replace(/\/$/, "");
+
 // Helper function to build full API URLs
 export const buildApiUrl = (endpoint) => {
   // Remove leading slash if present to avoid double slashes
