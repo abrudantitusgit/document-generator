@@ -17,14 +17,19 @@ const Folder = () => {
 
     useEffect(() => {
       fetch(`${baseUrl}/proiect/proiecteinclude`)
-      .then(response => response.json())
-      .then(data => setProiecte(data)).catch(error=>console.log(error));
+      .then(response => response.ok ? response.json() : [])
+      .then(data => setProiecte(Array.isArray(data) ? data : [])).catch(error=>console.log(error));
     },[]);
 
     useEffect(() => {
       fetch(`${baseUrl}/grup/Bransament`)
-      .then(response => response.json())
-      .then(data => {setGrup(data); setFoldere(data.foldere)});
+      .then(async response => response.ok ? response.json().catch(() => null) : null)
+      .then(data => {
+        const grupIncarcat = data && Array.isArray(data.foldere) ? data : { foldere: [] };
+        setGrup(grupIncarcat);
+        setFoldere(grupIncarcat.foldere);
+      })
+      .catch(error => console.error("Eroare la încărcarea grupului de documente", error));
     },[]);
 
 

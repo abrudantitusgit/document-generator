@@ -1,21 +1,10 @@
-// Dynamic API configuration that automatically detects the current domain
+// API routes use a consistent lower camelCase JSON contract. CRA can override
+// the origin at build time; the local Docker deployment uses the host API port.
 const getBaseUrl = () => {
-  // Get the current origin (protocol + hostname + port)
-  const origin = window.location.origin;
-  
-  // For development, if running on localhost, use port 5000 for HTTP backend
-  if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-    return 'http://localhost:5000';
-  }
-  
-  // For production or other environments, use HTTP with port 5000
-  const hostname = window.location.hostname;
-  
-  // Use HTTP with port 5000 for the backend API (allow all IPs)
-  return `http://${hostname}:5000`;
+  if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL.replace(/\/$/, "");
+  return `${window.location.protocol}//${window.location.hostname}:5000`;
 };
 
-// Export the base URL for use throughout the application
 export const baseUrl = getBaseUrl();
 
 // Helper function to build full API URLs
@@ -24,6 +13,3 @@ export const buildApiUrl = (endpoint) => {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
   return `${baseUrl}/${cleanEndpoint}`;
 };
-
-// Log the base URL for debugging
-console.log('API Base URL:', baseUrl);

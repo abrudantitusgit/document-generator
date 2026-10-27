@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Cors;
 using InterfataActe.Interfaces;
 using InterfataActe.Models;
+using InterfataActe.Brockers;
+using Microsoft.EntityFrameworkCore;
 
 namespace InterfataActe.Controllers
 {
@@ -15,10 +17,12 @@ namespace InterfataActe.Controllers
     public class FirmaController:ControllerBase
     {
         public readonly IFirmaRepository _firma;
+        private readonly InterfataActeBrocker _database;
 
-        public FirmaController(IFirmaRepository firma)
+        public FirmaController(IFirmaRepository firma, InterfataActeBrocker database)
         {
             _firma = firma;
+            _database = database;
         }
 
 
@@ -38,6 +42,23 @@ namespace InterfataActe.Controllers
         public IActionResult ListFirma()
         {
             return Ok(_firma.GetAllFirme());
+        }
+
+        [HttpDelete("{id:guid}")]
+        public IActionResult DeleteFirma(Guid id)
+        {
+            var firma = _database.Firme.Find(id);
+            if (firma == null) return NotFound(new { message = "Compania nu a fost găsită." });
+            try
+            {
+                _database.Firme.Remove(firma);
+                _database.SaveChanges();
+                return NoContent();
+            }
+            catch (DbUpdateException)
+            {
+                return Conflict(new { message = "Compania este folosită de proiecte și nu poate fi ștearsă." });
+            }
         }
 
 

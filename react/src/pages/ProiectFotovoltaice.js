@@ -167,8 +167,8 @@ export default function ProiectFotovoltaice(props) {
       setLoadingClienti(true);
       try {
         const res = await fetch(`${baseUrl}/client/clientifirme`);
-        const data = await res.json();
-        setClienti(data);
+        const data = await res.json().catch(() => []);
+        setClienti(res.ok && Array.isArray(data) ? data : []);
       } catch (e) {
         console.error("Eroare la încărcare clienți", e);
       } finally {

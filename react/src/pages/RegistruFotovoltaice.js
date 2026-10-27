@@ -3,7 +3,6 @@ import { baseUrl } from "../config/api";
 import ProiectFotovoltaice from "./ProiectFotovoltaice.js";
 import Modal from "../components/Modal.js";
 import GenerateFotovoltaice from "./GenerateFotovoltaice.js"
-import { Link } from "react-router-dom";
 
 export default function ProiecteFotovoltaiceList() {
 
@@ -11,9 +10,12 @@ export default function ProiecteFotovoltaiceList() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
+  const [filterCounty, setFilterCounty] = useState("");
+  const [filterSystem, setFilterSystem] = useState("");
   const [expanded, setExpanded] = useState(() => new Set());
   const [editing, setEditing] = useState(null);
   const [isEditOpen, setIsEditOpen]=useState(false);
+  const [isAddOpen, setIsAddOpen]=useState(false);
   const [generating, setGenerating]=useState(null);
   const [isGenerateOpen, setIsGenerateOpen]=useState(false);
   const [sortBy, setSortBy] = useState("nrProiect"); // data, nrProiect, client
@@ -93,6 +95,9 @@ export default function ProiecteFotovoltaiceList() {
       });
     }
 
+    if (filterCounty) list = list.filter((project) => project.judet === filterCounty);
+    if (filterSystem) list = list.filter((project) => project.tipSistem === filterSystem);
+
     // sort desc by data (dacă lipsește, lasă jos)
     list = [...list].sort((a, b) => {
       let va, vb;
@@ -121,7 +126,10 @@ export default function ProiecteFotovoltaiceList() {
     });
 
     return list;
-  }, [items, q,sortBy, sortDir]);
+  }, [items, q, filterCounty, filterSystem, sortBy, sortDir]);
+
+  const counties = [...new Set(items.map((item) => item.judet).filter(Boolean))].sort();
+  const systemTypes = [...new Set(items.map((item) => item.tipSistem).filter(Boolean))].sort();
 
   const formatDate = (iso) => {
     if (!iso) return "-";
@@ -192,15 +200,19 @@ const onDelete = async (id) => {
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
          <button style={styles.btn} onClick={handleExport}>Export Excel</button>
          
-          <Link to="/proiectfotovoltaice">
-          <button style={styles.btnAdd}>Adaugă Proiect</button>
-         </Link>
+          <button style={styles.btnAdd} onClick={() => setIsAddOpen(true)}>Adaugă Proiect</button>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Caută după nrProiect, județ, localitate, POD, tip..."
             style={styles.input}
           />
+          <select className="pv-toolbar-filter" aria-label="Filtrează după județ" value={filterCounty} onChange={(event) => setFilterCounty(event.target.value)}>
+            <option value="">Toate județele</option>{counties.map((county) => <option key={county} value={county}>{county}</option>)}
+          </select>
+          <select className="pv-toolbar-filter" aria-label="Filtrează după tipul sistemului" value={filterSystem} onChange={(event) => setFilterSystem(event.target.value)}>
+            <option value="">Toate sistemele</option>{systemTypes.map((system) => <option key={system} value={system}>{system}</option>)}
+          </select>
           <div style={{ display: "flex", gap: 6 }}>
 
           <button
@@ -432,6 +444,13 @@ const onDelete = async (id) => {
             setEditing(null);
         }}
          />
+      </Modal>
+
+      <Modal open={isAddOpen} onClose={() => setIsAddOpen(false)} width={1300}>
+        <ProiectFotovoltaice onSuccess={(created) => {
+          setItems((previous) => [created, ...previous]);
+          setIsAddOpen(false);
+        }} />
       </Modal>
 
     <Modal open={isGenerateOpen} onClose={() => setIsGenerateOpen(false)} width={1300}>
