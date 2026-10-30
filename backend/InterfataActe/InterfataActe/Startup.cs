@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using InterfataActe.Repositories;
 using InterfataActe.Interfaces;
 using InterfataActe.Helpers;
+using InterfataActe.Drawings;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using InterfataActe.Services;
 using System.Text.Json;
@@ -67,6 +68,9 @@ namespace InterfataActe
             services.AddScoped<IProiectRepository, ProiectRepository>();
             services.AddScoped<IProiectFotovoltaiceRepository, ProiectFotovoltaiceRepository>();
 
+
+            services.Configure<DrawingOptions>(Configuration.GetSection("Drawings"));
+            services.AddSingleton<DrawingService>();
 
             services.AddScoped<Word2>();
 

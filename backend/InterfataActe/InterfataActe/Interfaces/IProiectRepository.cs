@@ -13,6 +13,7 @@ namespace InterfataActe.Interfaces
         Proiect ModifyProiect(Proiect proiect);
         List<Proiect> GetAllProiecte();
         Proiect GetProiectById(Guid Id);
+        Proiect GetProiectByIdInclude(Guid Id);
         List<Proiect> GetAllProiecteIncludeNull();
         List<Proiect> GetAllProiecteInclude();
         List<DTORegistru> GetRegistru();

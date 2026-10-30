@@ -5,6 +5,9 @@ __pycache__/
 # Personal ID sample used for local OCR calibration
 /example.jpeg
 
+exampleDraws
+generatedDraws
+
 # Local environment files
 .env
 .env.*

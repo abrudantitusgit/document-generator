@@ -27,6 +27,14 @@ namespace InterfataActe.Repositories
             return proiect;
         }
 
+        public Proiect GetProiectByIdInclude(Guid Id)
+        {
+            return _context.Proiecte.Where(x => x.ID == Id).
+                Include(x => x.Client).
+                Include(x => x.Firma).
+                Include(x => x.Atr).FirstOrDefault();
+        }
+
         public Proiect ModifyProiect(Proiect proiect)
         {
             _context.Update(proiect);

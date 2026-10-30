@@ -13,5 +13,6 @@ namespace InterfataActe.DTO
         public Proiect Proiect { get; set; }
         [Required]
         public Grup Grup { get; set; }
+        public bool GenereazaDesene { get; set; } = true;
     }
 }

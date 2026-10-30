@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using InterfataActe.Brockers;
+using InterfataActe.Drawings;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,6 +19,10 @@ namespace InterfataActe
         public static void Main(string[] args)
         {
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+            if (args.Length > 0 && args[0] == "--generate-samples")
+            {
+                Environment.Exit(GenerateSamples(args.Length > 1 ? args[1] : "generatedDraws"));
+            }
             var host = CreateHostBuilder(args).Build();
             using (var scope = host.Services.CreateScope())
             {
@@ -38,6 +44,17 @@ namespace InterfataActe
                 database.Database.EnsureCreated();
             }
             host.Run();
+        }
+
+        // Writes the generatedDraws catalogue without starting the web host or touching the database.
+        private static int GenerateSamples(string folder)
+        {
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: true)
+                .Build();
+            var options = configuration.GetSection("Drawings").Get<DrawingOptions>() ?? new DrawingOptions();
+            return SampleCatalog.Generate(folder, new DrawingService(Options.Create(options)));
         }
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>

@@ -4,10 +4,11 @@ import "../css/components/form.css";
 import Combobox from "react-widgets/Combobox";
 import "react-widgets/styles.css";
 import { baseUrl } from "../config/api";
+import Desene from "../components/Desene";
 
 const Folder = (props) => {
   const [grup, setGrup] = useState({ foldere: [] });
-  const [imprima, setImprima] = useState({ proiect: props.proiect });
+  const [imprima, setImprima] = useState({ proiect: props.proiect, genereazaDesene: true });
   const [foldere, setFoldere] = useState([]);
   const [loading, setLoading] = useState(false); // <-- loading state
 
@@ -70,11 +71,13 @@ const Folder = (props) => {
       },
       body: JSON.stringify(imprima),
     })
-      .then((response) => {
+      .then(async (response) => {
         setLoading(false); // <-- stop loading
+        const result = await response.json().catch(() => null);
+        const mesaje = result?.messages?.length ? "\n" + result.messages.join("\n") : "";
         if (!response.ok) {
-          alert("Eroare");
-        } else alert("Salvat");
+          alert("Eroare" + mesaje);
+        } else alert(`Salvat${result?.fisiere?.length ? ` (${result.fisiere.length} fișiere desene)` : ""}${mesaje}`);
       })
       .catch((error) => {
         setLoading(false); // <-- stop loading on error
@@ -117,6 +120,12 @@ const Folder = (props) => {
           </div>
         ))}
       </div>
+
+      <Desene
+        endpoint={`/desene/fotovoltaice/${imprima.proiect.id}`}
+        checked={imprima.genereazaDesene}
+        onChange={(checked) => setImprima({ ...imprima, genereazaDesene: checked })}
+      />
 
       <button className={`generate ${loading ? "loading" : ""}`} onClick={Create} disabled={loading}>
         {loading ? "Se generează..." : "Generează"}

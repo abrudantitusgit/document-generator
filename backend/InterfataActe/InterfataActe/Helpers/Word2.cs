@@ -12,6 +12,7 @@ using InterfataActe.Models;
 
 using Xceed.Words.NET;
 using System.Reflection.Metadata;
+using InterfataActe.Drawings;
 
 namespace InterfataActe.Helpers
 {
@@ -20,10 +21,12 @@ namespace InterfataActe.Helpers
     {
 
         private readonly IFisierRepository _fisier;
+        private readonly DrawingService _drawings;
 
-        public Word2(IFisierRepository fisier)
+        public Word2(IFisierRepository fisier, DrawingService drawings)
         {
             _fisier = fisier;
+            _drawings = drawings;
         }
         public Boolean GenerateBransament(Imprima imprima)
 
@@ -221,6 +224,19 @@ paragraph.ReplaceText("<Proiect.DataPlus>", proiect.Data.AddMonths(1).ToString("
                     }
                    
                 }
+
+            if (imprima.GenereazaDesene)
+            {
+                try
+                {
+                    var desene = _drawings.GenerateForBransament(proiect, DrawingService.BransamentFolder(proiect, grup.Nume), false);
+                    desene.Messages.ForEach(Console.WriteLine);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Eroare la generarea desenelor: " + ex.Message);
+                }
+            }
             return true;
         }
 
@@ -507,6 +523,20 @@ paragraph.ReplaceText("<Proiect.DataPlus>", proiect.Data.AddMonths(1).ToString("
                    
                 }
                  result.Success = true;
+
+                if (imprima.GenereazaDesene)
+                {
+                    try
+                    {
+                        var desene = _drawings.GenerateForFotovoltaice(proiect, DrawingService.FotovoltaiceFolder(proiect), false);
+                        result.Messages.AddRange(desene.Messages);
+                        result.Fisiere.AddRange(desene.Fisiere);
+                    }
+                    catch (Exception exDesene)
+                    {
+                        result.Messages.Add($"Eroare la generarea desenelor: {exDesene.Message}");
+                    }
+                }
             }
 
             catch (Exception ex)

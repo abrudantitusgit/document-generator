@@ -4,12 +4,13 @@ import "../css/components/form.css";
 import Combobox from "react-widgets/Combobox";
 import "react-widgets/styles.css";
 import { baseUrl } from "../config/api";
+import Desene from "../components/Desene";
 //import { findByPlaceholderText } from "@testing-library/react";
 
 const Folder = () => {
 
     const[grup,setGrup] = useState({foldere:[]});
-    const[imprima,setImprima] = useState({});
+    const[imprima,setImprima] = useState({genereazaDesene:true});
     const[proiecte,setProiecte] = useState([]);
     const[foldere,setFoldere] = useState([]);
 
@@ -149,6 +150,8 @@ const Folder = () => {
           ) 
         } 
         </div>
+
+        {imprima.proiect && <Desene endpoint={`/desene/bransament/${imprima.proiect.id}`} checked={imprima.genereazaDesene} onChange={checked=>setImprima({...imprima,genereazaDesene:checked})}/>}
   
         <button className="generate" onClick={()=>{Create();}}>Genereaza</button>
 
